@@ -1,0 +1,21 @@
+{
+  "name": "sigel-monur-xviii-r10",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace frontend",
+    "dev:frontend": "npm run dev --workspace frontend",
+    "dev:backend": "npm run dev --workspace backend",
+    "start": "npm run dev:all",
+    "dev:all": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "build": "npm run build --workspace frontend",
+    "test": "npm run test --workspace backend"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3"
+  }
+}

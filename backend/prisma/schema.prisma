@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Comision {
+  id        Int        @id @default(autoincrement())
+  nombre    String     @unique @db.VarChar(255)
+  createdAt DateTime   @default(now()) @map("created_at")
+  users     User[]
+  delegados Delegado[]
+
+  @@map("comisiones")
+}
+
+model User {
+  id           Int        @id @default(autoincrement())
+  email        String     @unique @db.VarChar(255)
+  passwordHash String     @map("password_hash") @db.VarChar(255)
+  role         Role
+  comisionId   Int?       @map("comision_id")
+  ultimoLogin  DateTime?  @map("ultimo_login")
+  estado       EstadoUser @default(activo)
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  deletedAt    DateTime?  @map("deleted_at")
+  comision     Comision?  @relation(fields: [comisionId], references: [id])
+  audits       Audit[]
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+model Delegado {
+  id           Int           @id @default(autoincrement())
+  nombre       String        @db.VarChar(255)
+  designacion  String        @db.VarChar(255)
+  comisionId   Int           @map("comision_id")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  comision     Comision      @relation(fields: [comisionId], references: [id])
+  calificacion Calificacion?
+
+  @@index([comisionId])
+  @@index([nombre])
+  @@map("delegados")
+}
+
+model Calificacion {
+  id              Int             @id @default(autoincrement())
+  delegadoId      Int             @unique @map("delegado_id")
+  oratoria        Int?
+  argumentacion   Int?
+  negociacion     Int?
+  liderazgo       Int?
+  redaccion       Int?
+  ponderada       Float           @default(0)
+  presenteEstado  PresenteEstado? @map("presente_estado")
+  pasaMinumeXvii  Boolean?        @map("pasa_minume_xvii")
+  mencion         String?         @db.Text
+  feedback        String?         @db.Text
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  delegado        Delegado        @relation(fields: [delegadoId], references: [id])
+
+  @@index([delegadoId])
+  @@index([ponderada])
+  @@map("calificaciones")
+}
+
+model Audit {
+  id         Int      @id @default(autoincrement())
+  userId     Int?     @map("user_id")
+  action     String   @db.VarChar(100)
+  entityType String   @map("entity_type") @db.VarChar(100)
+  entityId   Int?     @map("entity_id")
+  changes    Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+  user       User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audits")
+}
+
+model Config {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique @db.VarChar(255)
+  value     String?  @db.Text
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("config")
+}
+
+enum Role {
+  superadmin
+  admin
+}
+
+enum EstadoUser {
+  activo
+  inactivo
+}
+
+enum PresenteEstado {
+  presente_votando
+  presente_ausente
+}
