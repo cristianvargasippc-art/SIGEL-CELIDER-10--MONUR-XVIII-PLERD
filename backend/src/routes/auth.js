@@ -21,6 +21,15 @@ authRouter.post("/login", loginLimiter, validate(loginSchema), async (req, res) 
   if (!valid) return res.status(401).json({ error: "Credenciales invalidas" });
 
   await prisma.user.update({ where: { id: user.id }, data: { ultimoLogin: new Date() } });
+  await prisma.audit.create({
+    data: {
+      userId: user.id,
+      action: "login",
+      entityType: "user",
+      entityId: user.id,
+      changes: { email: user.email, role: user.role }
+    }
+  });
 
   const payload = { id: user.id, email: user.email, role: user.role, comision_id: user.comisionId };
   const accessToken = jwt.sign(payload, process.env.JWT_SECRET, {

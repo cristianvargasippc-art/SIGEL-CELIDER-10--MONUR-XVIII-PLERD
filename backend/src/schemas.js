@@ -24,6 +24,7 @@ export const feedbackSchema = z.object({
 
 export const adminSchema = z.object({
   email: z.string().email(),
+  password: z.string().min(8).max(100).optional(),
   comision_id: z.number().int().positive().optional()
 });
 

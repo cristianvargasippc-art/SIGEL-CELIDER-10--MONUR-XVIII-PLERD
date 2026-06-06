@@ -39,9 +39,9 @@ delegadosRouter.post("/import", verifyToken, authorize("superadmin"), upload.sin
   const errors = [];
 
   for (const row of rows) {
-    const nombre = row.Nombre || row.nombre;
-    const designacion = row.Designacion || row["Designacion"] || row["Designación"];
-    const comisionNombre = row.Comision || row["Comision"] || row["Comisión"];
+    const nombre = row.Nombre || row.nombre || row.Delegado || row.delegado;
+    const designacion = row.Delegacion || row["Delegación"] || row.Designacion || row["Designación"];
+    const comisionNombre = row.Comision || row["Comisión"] || row.Comite || row["Comité"];
 
     if (!nombre || !designacion || !comisionNombre) {
       errors.push({ row, error: "Columnas requeridas incompletas" });

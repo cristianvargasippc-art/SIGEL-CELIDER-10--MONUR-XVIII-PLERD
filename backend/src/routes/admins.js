@@ -1,6 +1,5 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import crypto from "crypto";
 import { prisma } from "../db.js";
 import { authorize, verifyToken } from "../middleware/auth.js";
 import { validate } from "../middleware/validate.js";
@@ -18,7 +17,7 @@ adminsRouter.get("/", verifyToken, authorize("superadmin"), async (_req, res) =>
 });
 
 adminsRouter.post("/", verifyToken, authorize("superadmin"), validate(adminSchema), async (req, res) => {
-  const password = crypto.randomBytes(9).toString("base64").replace(/[+/=]/g, "A");
+  const password = req.body.password || Math.random().toString(36).slice(2, 12) + "A1";
   const hash = await bcrypt.hash(password, Number(process.env.BCRYPT_ROUNDS || 10));
   const admin = await prisma.user.create({
     data: {
@@ -34,7 +33,7 @@ adminsRouter.post("/", verifyToken, authorize("superadmin"), validate(adminSchem
       action: "admin_creado",
       entityType: "user",
       entityId: admin.id,
-      changes: { email: admin.email, comision_id: admin.comisionId }
+      changes: { email: admin.email, comision_id: admin.comisionId, password_definida: Boolean(req.body.password) }
     }
   });
   return res.status(201).json({ id: admin.id, email: admin.email, password_temp: password });

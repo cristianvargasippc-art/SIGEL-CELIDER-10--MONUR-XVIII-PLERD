@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -99,14 +99,20 @@ model Config {
 enum Role {
   superadmin
   admin
+
+  @@map("role")
 }
 
 enum EstadoUser {
   activo
   inactivo
+
+  @@map("estado_user")
 }
 
 enum PresenteEstado {
   presente_votando
   presente_ausente
+
+  @@map("presente_estado")
 }

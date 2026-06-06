@@ -13,13 +13,14 @@ async function main() {
     });
   }
 
-  const password = "TemporalPassword123";
+  const email = process.env.SUPERADMIN_EMAIL || "superadmin@celider10.edu.do";
+  const password = process.env.SUPERADMIN_PASSWORD || "TemporalPassword123";
   const hash = await bcrypt.hash(password, Number(process.env.BCRYPT_ROUNDS || 10));
   await prisma.user.upsert({
-    where: { email: "superadmin@monur.edu.do" },
+    where: { email },
     update: {},
     create: {
-      email: "superadmin@monur.edu.do",
+      email,
       passwordHash: hash,
       role: "superadmin"
     }
@@ -32,7 +33,7 @@ async function main() {
   });
 
   console.log("Seed completado");
-  console.log("Email: superadmin@monur.edu.do");
+  console.log(`Email: ${email}`);
   console.log(`Password temporal: ${password}`);
 }
 
