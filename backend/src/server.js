@@ -3,6 +3,8 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 import { adminsRouter } from "./routes/admins.js";
 import { auditRouter } from "./routes/audit.js";
 import { authRouter } from "./routes/auth.js";
@@ -13,10 +15,13 @@ import { exportRouter } from "./routes/export.js";
 import { rankingRouter } from "./routes/ranking.js";
 import { logger } from "./utils/logger.js";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const app = express();
 const port = Number(process.env.PORT || 3000);
 
-app.use(helmet());
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: process.env.APP_URL || "http://localhost:5173", credentials: true }));
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
@@ -30,6 +35,12 @@ app.use("/api/audit", auditRouter);
 app.use("/api/admins", adminsRouter);
 app.use("/api/config", configRouter);
 app.use("/api/export", exportRouter);
+
+const frontendPath = join(__dirname, "../../frontend/dist");
+app.use(express.static(frontendPath));
+app.get("*", (_req, res) => {
+  res.sendFile(join(frontendPath, "index.html"));
+});
 
 app.use((err, _req, res, _next) => {
   logger.error("Unhandled error", { error: err.message, stack: err.stack });
@@ -48,7 +59,6 @@ function startServer(currentPort) {
       startServer(fallbackPort);
       return;
     }
-
     logger.error("Error al iniciar el servidor", { error: error.message, stack: error.stack });
     process.exit(1);
   });
