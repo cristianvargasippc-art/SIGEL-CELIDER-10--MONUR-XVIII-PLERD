@@ -23,6 +23,79 @@ import "./styles.css";
 import "./home.css";
 
 const LOGO_SRC = "/imagenes/logo.png";
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
+let accessToken = null;
+
+function setAccessToken(token) {
+  accessToken = token || null;
+}
+
+async function apiRequest(path, options = {}) {
+  const headers = new Headers(options.headers || {});
+  if (!(options.body instanceof FormData) && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+
+  let response = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: "include" });
+
+  if (response.status === 401 && path !== "/api/auth/refresh" && path !== "/api/auth/login") {
+    const refreshed = await fetch(`${API_BASE}/api/auth/refresh`, { method: "POST", credentials: "include" });
+    if (refreshed.ok) {
+      const data = await refreshed.json();
+      setAccessToken(data.access_token);
+      headers.set("Authorization", `Bearer ${data.access_token}`);
+      response = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: "include" });
+    }
+  }
+
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!response.ok) throw new Error(data?.error || "No se pudo completar la solicitud.");
+  return data;
+}
+
+function mapDelegado(row) {
+  const calificacion = row.calificacion || {};
+  return {
+    id: row.id,
+    nombre: row.nombre,
+    designacion: row.designacion,
+    comision: row.comision?.nombre || row.comision || "",
+    comisionId: row.comisionId || row.comision_id,
+    estado: calificacion.presenteEstado || calificacion.presente_estado || "presente_votando",
+    oratoria: calificacion.oratoria ?? 0,
+    argumentacion: calificacion.argumentacion ?? 0,
+    negociacion: calificacion.negociacion ?? 0,
+    liderazgo: calificacion.liderazgo ?? 0,
+    redaccion: calificacion.redaccion ?? 0,
+    pasa: Boolean(calificacion.pasaMinumeXvii ?? calificacion.pasa_minume_xvii),
+    mencion: calificacion.mencion || "",
+    feedback: calificacion.feedback || ""
+  };
+}
+
+function mapAdmin(admin) {
+  return {
+    id: admin.id,
+    email: admin.email,
+    comision: admin.comision?.nombre || "Sin comisión",
+    comisionId: admin.comisionId || admin.comision_id,
+    estado: admin.estado === "activo" ? "Activo" : "Inactivo",
+    ultimoLogin: admin.ultimoLogin || admin.ultimo_login
+  };
+}
+
+function mapAudit(item) {
+  return {
+    id: item.id,
+    hora: new Date(item.createdAt || item.created_at || Date.now()).toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" }),
+    tipo: item.action || item.tipo,
+    usuario: item.user?.email || "Sistema",
+    detalle: item.changes ? JSON.stringify(item.changes) : item.detalle || item.entityType || "Movimiento registrado"
+  };
+}
 
 const criterios = {
   oratoria: {
@@ -291,20 +364,35 @@ function CalificacionesTable({ rows, setRows, scope = "all", onAudit }) {
     return matchesText && matchesDelegacion;
   });
 
-  function update(id, key, value) {
+  async function update(id, key, value) {
     const delegado = rows.find((row) => row.id === id);
+    if (!delegado) return;
+    let nextValue = value;
+    if (criterios[key]) {
+      nextValue = Math.max(0, Math.min(Number(value), criterios[key].max));
+    }
     setRows((actuales) =>
       actuales.map((row) => {
         if (row.id !== id) return row;
-        if (criterios[key]) {
-          const limpio = Math.max(0, Math.min(Number(value), criterios[key].max));
-          return { ...row, [key]: limpio };
-        }
-        return { ...row, [key]: value };
+        return { ...row, [key]: nextValue };
       })
     );
-    if (delegado && onAudit) {
-      onAudit("Calificación actualizada", `${delegado.nombre} (${delegado.comision}): ${criterios[key]?.label || key} modificado.`);
+
+    const apiKey = {
+      estado: "presente_estado",
+      pasa: "pasa_minume_xvii"
+    }[key] || key;
+
+    try {
+      await apiRequest(`/api/calificaciones/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ [apiKey]: nextValue })
+      });
+      if (onAudit) {
+        onAudit("Calificación actualizada", `${delegado.nombre} (${delegado.comision}): ${criterios[key]?.label || key} modificado.`);
+      }
+    } catch (error) {
+      onAudit?.("Error de guardado", `${delegado.nombre}: ${error.message}`);
     }
   }
 
@@ -474,31 +562,26 @@ function PublicRanking({ rows, published }) {
   );
 }
 
-function UploadDelegados({ setRows, onAudit }) {
+function UploadDelegados({ setRows, onAudit, onReload }) {
   const [mensaje, setMensaje] = useState("Formato requerido: Nombre, Delegación, Comisión.");
 
-  function handleUpload(event) {
+  async function handleUpload(event) {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (loadEvent) => {
-      const data = new Uint8Array(loadEvent.target.result);
-      const workbook = XLSX.read(data, { type: "array" });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const records = XLSX.utils.sheet_to_json(sheet);
-      const delegados = records.map(normalizarDelegado).filter((row) => row.nombre && row.designacion && row.comision);
-
-      if (!delegados.length) {
-        setMensaje("No se encontraron filas válidas. Revisa que existan las columnas Nombre, Delegación y Comisión.");
-        return;
-      }
-
-      setRows(delegados);
-      setMensaje(`${delegados.length} delegados cargados correctamente desde ${file.name}.`);
-      onAudit("Listado importado", `${delegados.length} delegados cargados desde Excel.`);
-    };
-    reader.readAsArrayBuffer(file);
+    try {
+      setMensaje("Subiendo y guardando listado en la base de datos...");
+      const formData = new FormData();
+      formData.append("file", file);
+      const result = await apiRequest("/api/delegados/import", { method: "POST", body: formData });
+      await onReload();
+      setMensaje(`${result.imported_count} delegados guardados en la base de datos desde ${file.name}.`);
+      onAudit("Listado importado", `${result.imported_count} delegados cargados desde Excel.`);
+    } catch (error) {
+      setMensaje(error.message);
+    } finally {
+      event.target.value = "";
+    }
   }
 
   return (
@@ -583,21 +666,29 @@ function CommitteeDashboard({ rows, auditLog }) {
   );
 }
 
-function AdminUsersPanel({ rows, admins, setAdmins, onAudit }) {
+function AdminUsersPanel({ rows, admins, setAdmins, onAudit, onReload }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [comision, setComision] = useState("");
   const comisiones = [...new Set(rows.map((row) => row.comision))];
 
-  function addAdmin(event) {
+  async function addAdmin(event) {
     event.preventDefault();
     if (!email || !password || !comision) return;
-    const nuevo = { id: Date.now(), email, comision, estado: "Activo", passwordTemporal: password };
-    setAdmins((actuales) => [nuevo, ...actuales]);
-    setEmail("");
-    setPassword("");
-    setComision("");
-    onAudit("Admin asignado", `${email} fue asignado a ${comision} con contraseña definida por superadmin.`);
+    const selected = rows.find((row) => row.comision === comision);
+    try {
+      await apiRequest("/api/admins", {
+        method: "POST",
+        body: JSON.stringify({ email, password, comision_id: selected?.comisionId })
+      });
+      await onReload();
+      setEmail("");
+      setPassword("");
+      setComision("");
+      onAudit("Admin asignado", `${email} fue asignado a ${comision} con contraseña definida por superadmin.`);
+    } catch (error) {
+      onAudit("Error al asignar admin", error.message);
+    }
   }
 
   return (
@@ -655,16 +746,22 @@ function AuditPanel({ auditLog }) {
   );
 }
 
-function Dashboard({ user, rows, setRows, published, setPublished, active, setActive, onLogout, auditLog, onAudit, admins, setAdmins }) {
+function Dashboard({ user, rows, setRows, published, setPublished, active, setActive, onLogout, auditLog, onAudit, admins, setAdmins, onReload }) {
   const calificados = rows.filter((row) => calcularPonderada(row) > 0).length;
   const promedio = rows.length ? rows.reduce((sum, row) => sum + calcularPonderada(row), 0) / rows.length : 0;
   const comisiones = new Set(rows.map((row) => row.comision)).size;
 
-  function togglePublished() {
+  async function togglePublished() {
     const next = !published;
-    setPublished(next);
-    onAudit(next ? "Resultados publicados" : "Resultados ocultados", `La consulta publica fue ${next ? "activada" : "desactivada"}.`);
+    try {
+      await apiRequest("/api/config/publish", { method: "PATCH", body: JSON.stringify({ publish: next }) });
+      setPublished(next);
+      onAudit(next ? "Resultados publicados" : "Resultados ocultados", `La consulta publica fue ${next ? "activada" : "desactivada"}.`);
+    } catch (error) {
+      onAudit("Error de publicación", error.message);
+    }
   }
+  const isSuperadmin = user.role === "superadmin";
 
   return (
     <div className="app-shell">
@@ -678,11 +775,11 @@ function Dashboard({ user, rows, setRows, published, setPublished, active, setAc
         </div>
         <nav className="nav-actions" aria-label="Secciones administrativas">
           <button className={active === "dashboard" ? "active" : ""} onClick={() => setActive("dashboard")} type="button">Resumen</button>
-          <button className={active === "importar" ? "active" : ""} onClick={() => setActive("importar")} type="button">Importar</button>
-          <button className={active === "usuarios" ? "active" : ""} onClick={() => setActive("usuarios")} type="button">Usuarios</button>
+          {isSuperadmin && <button className={active === "importar" ? "active" : ""} onClick={() => setActive("importar")} type="button">Importar</button>}
+          {isSuperadmin && <button className={active === "usuarios" ? "active" : ""} onClick={() => setActive("usuarios")} type="button">Usuarios</button>}
           <button className={active === "calificar" ? "active" : ""} onClick={() => setActive("calificar")} type="button">Calificar</button>
           <button className={active === "rubricas" ? "active" : ""} onClick={() => setActive("rubricas")} type="button">Rúbricas</button>
-          <button className={active === "auditoria" ? "active" : ""} onClick={() => setActive("auditoria")} type="button">Auditoría</button>
+          {isSuperadmin && <button className={active === "auditoria" ? "active" : ""} onClick={() => setActive("auditoria")} type="button">Auditoría</button>}
           <button className={active === "ranking" ? "active" : ""} onClick={() => setActive("ranking")} type="button">Ranking</button>
         </nav>
         <div className="header-actions">
@@ -701,9 +798,9 @@ function Dashboard({ user, rows, setRows, published, setPublished, active, setAc
             <p>Gestiona delegados, controla la publicación y califica con rúbricas visibles para mantener consistencia académica.</p>
           </div>
           <div className="admin-controls">
-            <button className="btn primary" type="button" onClick={togglePublished}>
+            {isSuperadmin && <button className="btn primary" type="button" onClick={togglePublished}>
               <CheckCircle2 size={16} /> {published ? "Ocultar resultados" : "Publicar resultados"}
-            </button>
+            </button>}
             <button className="btn secondary" type="button" onClick={() => exportarExcel(rows)}>
               <FileSpreadsheet size={16} /> Excel general
             </button>
@@ -733,7 +830,7 @@ function Dashboard({ user, rows, setRows, published, setPublished, active, setAc
 
         {active === "importar" && (
           <section className="admin-grid">
-            <UploadDelegados setRows={setRows} onAudit={onAudit} />
+            <UploadDelegados setRows={setRows} onAudit={onAudit} onReload={onReload} />
             <article className="activity-card">
               <div className="section-heading compact">
                 <span>Formato requerido</span>
@@ -747,7 +844,7 @@ function Dashboard({ user, rows, setRows, published, setPublished, active, setAc
         )}
 
         {active === "usuarios" && (
-          <AdminUsersPanel rows={rows} admins={admins} setAdmins={setAdmins} onAudit={onAudit} />
+          <AdminUsersPanel rows={rows} admins={admins} setAdmins={setAdmins} onAudit={onAudit} onReload={onReload} />
         )}
 
         {active === "calificar" && (
@@ -939,7 +1036,7 @@ function LoginPage({ onLogin, onBack }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     if (!email || !password) {
       setError("Ingresa correo y contraseña para continuar.");
@@ -947,10 +1044,18 @@ function LoginPage({ onLogin, onBack }) {
     }
     setError("");
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const data = await apiRequest("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password })
+      });
+      setAccessToken(data.access_token);
       setLoading(false);
-      onLogin({ name: "Admin Monur", role: "Superadmin", email });
-    }, 450);
+      onLogin(data.user);
+    } catch (error) {
+      setLoading(false);
+      setError(error.message);
+    }
   }
 
   return (
@@ -991,32 +1096,86 @@ function App() {
   const [page, setPage] = useState("home");
   const [active, setActive] = useState("dashboard");
   const [published, setPublished] = useState(false);
-  const [rows, setRows] = useState(inicial);
+  const [rows, setRows] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [auditLog, setAuditLog] = useState([
-    crearMovimiento("Sistema iniciado", "Sesión de demostración local preparada para SIGEL CELIDER 10.", "Sistema")
+    crearMovimiento("Sistema iniciado", "Conectando con la base de datos SIGEL CELIDER 10.", "Sistema")
   ]);
+
+  async function loadPublicState() {
+    const status = await apiRequest("/api/config/publish-status");
+    setPublished(Boolean(status.published));
+    if (status.published) {
+      const ranking = await apiRequest("/api/ranking/general");
+      setRows(ranking.map(mapDelegado));
+    } else {
+      setRows([]);
+    }
+  }
+
+  async function loadAdminState(currentUser = user) {
+    const [delegados, status] = await Promise.all([
+      apiRequest("/api/delegados"),
+      apiRequest("/api/config/publish-status")
+    ]);
+    setRows(delegados.map(mapDelegado));
+    setPublished(Boolean(status.published));
+    if (currentUser?.role === "superadmin") {
+      const [adminRows, audits] = await Promise.all([
+        apiRequest("/api/admins"),
+        apiRequest("/api/audit")
+      ]);
+      setAdmins(adminRows.map(mapAdmin));
+      setAuditLog(audits.map(mapAudit));
+    }
+  }
+
+  React.useEffect(() => {
+    loadPublicState().catch(() => {
+      setRows([]);
+    });
+  }, []);
+
+  React.useEffect(() => {
+    async function restoreSession() {
+      try {
+        const refreshed = await apiRequest("/api/auth/refresh", { method: "POST" });
+        setAccessToken(refreshed.access_token);
+        const me = await apiRequest("/api/auth/me");
+        setUser(me.user);
+        await loadAdminState(me.user);
+      } catch {
+        setAccessToken(null);
+      }
+    }
+    restoreSession();
+  }, []);
 
   function handleAudit(tipo, detalle, usuario = user?.email || user?.name || "Superadmin") {
     setAuditLog((actuales) => [crearMovimiento(tipo, detalle, usuario), ...actuales]);
   }
 
   function handleSetActive(section) {
+    if (user?.role === "admin" && ["importar", "usuarios", "auditoria"].includes(section)) return;
     setActive(section);
     handleAudit("Navegación", `Ingresó a la sección ${section}.`);
   }
 
-  function handleLogin(nextUser) {
+  async function handleLogin(nextUser) {
     setUser(nextUser);
     setPage("home");
+    await loadAdminState(nextUser);
     setAuditLog((actuales) => [crearMovimiento("Inicio de sesión", `${nextUser.email} entró al panel administrativo.`, nextUser.email), ...actuales]);
   }
 
-  function handleLogout() {
+  async function handleLogout() {
     handleAudit("Cierre de sesión", `${user?.email || user?.name || "Usuario"} salió del panel.`);
+    await apiRequest("/api/auth/logout", { method: "POST" }).catch(() => {});
+    setAccessToken(null);
     setUser(null);
     setPage("home");
     setActive("dashboard");
+    loadPublicState().catch(() => {});
   }
 
   if (user) {
@@ -1034,6 +1193,7 @@ function App() {
         onAudit={handleAudit}
         admins={admins}
         setAdmins={setAdmins}
+        onReload={() => loadAdminState(user)}
       />
     );
   }

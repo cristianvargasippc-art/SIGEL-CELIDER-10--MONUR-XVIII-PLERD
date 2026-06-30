@@ -55,14 +55,18 @@ authRouter.post("/logout", (_req, res) => {
   return res.json({ success: true });
 });
 
-authRouter.post("/refresh", (req, res) => {
+authRouter.post("/refresh", async (req, res) => {
   const token = req.cookies.refresh_token;
   if (!token) return res.status(401).json({ error: "Refresh token requerido" });
 
   try {
-    const user = jwt.verify(token, process.env.JWT_SECRET);
+    const session = jwt.verify(token, process.env.JWT_SECRET);
+    const dbUser = await prisma.user.findUnique({ where: { id: session.id } });
+    if (!dbUser || dbUser.estado !== "activo" || dbUser.deletedAt) {
+      return res.status(401).json({ error: "Sesion invalida" });
+    }
     const accessToken = jwt.sign(
-      { id: user.id, email: user.email, role: user.role, comision_id: user.comision_id },
+      { id: dbUser.id, email: dbUser.email, role: dbUser.role, comision_id: dbUser.comisionId },
       process.env.JWT_SECRET,
       { expiresIn: Number(process.env.JWT_EXPIRATION || 3600) }
     );
@@ -70,6 +74,33 @@ authRouter.post("/refresh", (req, res) => {
   } catch {
     return res.status(403).json({ error: "Refresh token invalido" });
   }
+});
+
+authRouter.get("/me", verifyToken, async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    include: { comision: true }
+  });
+
+  if (!user || user.estado !== "activo" || user.deletedAt) {
+    return res.status(401).json({ error: "Sesion invalida" });
+  }
+
+  return res.json({
+    user: {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      comision_id: user.comisionId,
+      comision: user.comision?.nombre || null,
+      ultimo_login: user.ultimoLogin
+    }
+  });
+});
+
+authRouter.post("/verify", verifyToken, async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+  return res.json({ valid: Boolean(user && user.estado === "activo" && !user.deletedAt) });
 });
 
 authRouter.post("/change-password", verifyToken, async (req, res) => {
