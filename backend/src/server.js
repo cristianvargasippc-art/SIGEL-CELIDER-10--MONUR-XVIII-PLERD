@@ -35,6 +35,7 @@ app.use("/api/audit", auditRouter);
 app.use("/api/admins", adminsRouter);
 app.use("/api/config", configRouter);
 app.use("/api/export", exportRouter);
+app.use("/api", (_req, res) => res.status(404).json({ error: "Ruta API no encontrada" }));
 
 const frontendPath = join(__dirname, "../../frontend/dist");
 app.use(express.static(frontendPath));
