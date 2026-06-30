@@ -43,8 +43,17 @@ app.use(cookieParser());
 
 app.get("/api/health", (_req, res) => res.json({ status: "OK", app: "SIGEL CELIDER 10" }));
 app.get("/api/health/db", async (_req, res) => {
-  await prisma.$queryRaw`SELECT 1`;
-  return res.json({ status: "OK", database: "connected" });
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return res.json({ status: "OK", database: "connected" });
+  } catch (error) {
+    logger.error("Database health check failed", { error: error.message, code: error.code });
+    return res.status(500).json({
+      error: "No se pudo conectar con la base de datos",
+      detail: error.message,
+      code: error.code || null
+    });
+  }
 });
 app.use("/api/auth", wrapAsyncRoutes(authRouter));
 app.use("/api/delegados", wrapAsyncRoutes(delegadosRouter));
@@ -64,7 +73,11 @@ app.get("*", (_req, res) => {
 
 app.use((err, _req, res, _next) => {
   logger.error("Unhandled error", { error: err.message, stack: err.stack });
-  return res.status(500).json({ error: "Error interno del servidor" });
+  return res.status(500).json({
+    error: "Error interno del servidor",
+    detail: err.message,
+    code: err.code || null
+  });
 });
 
 function startServer(currentPort) {
