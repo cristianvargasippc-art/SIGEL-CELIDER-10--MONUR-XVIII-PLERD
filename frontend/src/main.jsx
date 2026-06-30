@@ -24,6 +24,13 @@ import "./home.css";
 
 const LOGO_SRC = "/imagenes/logo.png";
 const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/api\/?$/, "").replace(/\/$/, "");
+const API_BASES = (() => {
+  if (API_BASE) return [API_BASE];
+  if (typeof window === "undefined") return [""];
+  const { protocol, hostname } = window.location;
+  const apiHostname = hostname.startsWith("api.") ? hostname : `api.${hostname}`;
+  return ["", `${protocol}//${apiHostname}`];
+})();
 
 let accessToken = null;
 
@@ -38,15 +45,28 @@ async function apiRequest(path, options = {}) {
   }
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
 
-  let response = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: "include" });
+  async function fetchApi(requestPath, requestOptions = options) {
+    let lastHtmlResponse = null;
+    for (const base of API_BASES) {
+      const response = await fetch(`${base}${requestPath}`, { ...requestOptions, headers, credentials: "include" });
+      const contentType = response.headers.get("Content-Type") || "";
+      if (!contentType.includes("text/html") || response.ok || base === API_BASES[API_BASES.length - 1]) {
+        return { response, base };
+      }
+      lastHtmlResponse = { response, base };
+    }
+    return lastHtmlResponse;
+  }
+
+  let { response, base } = await fetchApi(path);
 
   if (response.status === 401 && path !== "/api/auth/refresh" && path !== "/api/auth/login") {
-    const refreshed = await fetch(`${API_BASE}/api/auth/refresh`, { method: "POST", credentials: "include" });
+    const refreshed = await fetch(`${base}/api/auth/refresh`, { method: "POST", credentials: "include" });
     if (refreshed.ok) {
       const data = await refreshed.json();
       setAccessToken(data.access_token);
       headers.set("Authorization", `Bearer ${data.access_token}`);
-      response = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: "include" });
+      response = await fetch(`${base}${path}`, { ...options, headers, credentials: "include" });
     }
   }
 
