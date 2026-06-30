@@ -51,7 +51,18 @@ async function apiRequest(path, options = {}) {
   }
 
   const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      const contentType = response.headers.get("Content-Type") || "respuesta sin tipo de contenido";
+      const details = response.ok
+        ? "El servidor devolvio una respuesta inesperada."
+        : `El servidor devolvio ${response.status} ${response.statusText || ""}`.trim();
+      throw new Error(`${details} Se esperaba JSON y se recibio ${contentType}.`);
+    }
+  }
   if (!response.ok) throw new Error(data?.error || "No se pudo completar la solicitud.");
   return data;
 }
