@@ -1,46 +1,55 @@
-﻿import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   BarChart3,
   CheckCircle2,
   Download,
-  Eye,
-  Filter,
   FileSpreadsheet,
-  Gauge,
   Lock,
   LogOut,
-  Search,
+  Plus,
   ShieldCheck,
-  SlidersHorizontal,
-  Trophy,
+  Trash2,
   Upload,
   UserPlus,
-  Users
+  Users,
+  AlignLeft,
+  AlignRight
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import "./styles.css";
 import "./home.css";
+import { getFlag } from "./utils/flags";
 
 const LOGO_SRC = "/imagenes/logo.png";
 const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/api\/?$/, "").replace(/\/$/, "");
+const DISTRITOS = ["10-01", "10-02", "10-03", "10-04", "10-05", "10-06", "10-07"];
+const PAISES = [
+  "Afganistan", "Albania", "Alemania", "Andorra", "Angola", "Antigua y Barbuda", "Arabia Saudita", "Argelia", "Argentina", "Armenia", "Australia", "Austria", "Azerbaiyan",
+  "Bahamas", "Banglades", "Barbados", "Barein", "Belgica", "Belice", "Benin", "Bielorrusia", "Birmania", "Bolivia", "Bosnia y Herzegovina", "Botsuana", "Brasil", "Brunei", "Bulgaria", "Burkina Faso", "Burundi", "Butan",
+  "Cabo Verde", "Camboya", "Camerun", "Canada", "Catar", "Chad", "Chile", "China", "Chipre", "Colombia", "Comoras", "Congo", "Corea del Norte", "Corea del Sur", "Costa de Marfil", "Costa Rica", "Croacia", "Cuba",
+  "Dinamarca", "Dominica", "Ecuador", "Egipto", "El Salvador", "Emiratos Arabes Unidos", "Eritrea", "Eslovaquia", "Eslovenia", "Espana", "Estados Unidos", "Estonia", "Esuatini", "Etiopia",
+  "Filipinas", "Finlandia", "Fiyi", "Francia", "Gabon", "Gambia", "Georgia", "Ghana", "Granada", "Grecia", "Guatemala", "Guinea", "Guinea-Bisau", "Guinea Ecuatorial", "Guyana",
+  "Haiti", "Honduras", "Hungria", "India", "Indonesia", "Irak", "Iran", "Irlanda", "Islandia", "Islas Marshall", "Islas Salomon", "Israel", "Italia", "Jamaica", "Japon", "Jordania",
+  "Kazajistan", "Kenia", "Kirguistan", "Kiribati", "Kuwait", "Laos", "Lesoto", "Letonia", "Libano", "Liberia", "Libia", "Liechtenstein", "Lituania", "Luxemburgo",
+  "Macedonia del Norte", "Madagascar", "Malasia", "Malaui", "Maldivas", "Mali", "Malta", "Marruecos", "Mauricio", "Mauritania", "Mexico", "Micronesia", "Moldavia", "Monaco", "Mongolia", "Montenegro", "Mozambique",
+  "Namibia", "Nauru", "Nepal", "Nicaragua", "Niger", "Nigeria", "Noruega", "Nueva Zelanda", "Oman", "Paises Bajos", "Pakistan", "Palaos", "Panama", "Papua Nueva Guinea", "Paraguay", "Peru", "Polonia", "Portugal",
+  "Reino Unido", "Republica Centroafricana", "Republica Checa", "Republica Democratica del Congo", "Republica Dominicana", "Ruanda", "Rumania", "Rusia",
+  "Samoa", "San Cristobal y Nieves", "San Marino", "San Vicente y las Granadinas", "Santa Lucia", "Santo Tome y Principe", "Senegal", "Serbia", "Seychelles", "Sierra Leona", "Singapur", "Siria", "Somalia", "Sri Lanka", "Sudafrica", "Sudan", "Sudan del Sur", "Suecia", "Suiza", "Surinam",
+  "Tailandia", "Tanzania", "Tayikistan", "Timor Oriental", "Togo", "Tonga", "Trinidad y Tobago", "Tunez", "Turkmenistan", "Turquia", "Tuvalu", "Ucrania", "Uganda", "Uruguay", "Uzbekistan", "Vanuatu", "Vaticano", "Venezuela", "Vietnam", "Yemen", "Yibuti", "Zambia", "Zimbabue"
+];
 
 let accessToken = null;
-
 function setAccessToken(token) {
   accessToken = token || null;
 }
 
 async function apiRequest(path, options = {}) {
   const headers = new Headers(options.headers || {});
-  if (!(options.body instanceof FormData) && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
+  if (!(options.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
-
   let response = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: "include" });
-
-  if (response.status === 401 && path !== "/api/auth/refresh" && path !== "/api/auth/login") {
+  if (response.status === 401 && path !== "/api/auth/login" && path !== "/api/auth/refresh") {
     const refreshed = await fetch(`${API_BASE}/api/auth/refresh`, { method: "POST", credentials: "include" });
     if (refreshed.ok) {
       const data = await refreshed.json();
@@ -49,1023 +58,85 @@ async function apiRequest(path, options = {}) {
       response = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: "include" });
     }
   }
-
   const text = await response.text();
   let data = null;
   if (text) {
     try {
       data = JSON.parse(text);
     } catch {
-      const contentType = response.headers.get("Content-Type") || "respuesta sin tipo de contenido";
-      const details = response.ok
-        ? "El servidor devolvio una respuesta inesperada."
-        : `El servidor devolvio ${response.status} ${response.statusText || ""}`.trim();
-      throw new Error(`${details} Se esperaba JSON y se recibio ${contentType}.`);
+      throw new Error(response.ok ? "El servidor devolvio una respuesta inesperada." : `Error del servidor (${response.status}).`);
     }
   }
   if (!response.ok) throw new Error(data?.error || "No se pudo completar la solicitud.");
   return data;
 }
 
+const criterios = {
+  oratoria: { label: "Oratoria", max: 15 },
+  argumentacion: { label: "Argumentacion", max: 25 },
+  negociacion: { label: "Negociacion", max: 20 },
+  liderazgo: { label: "Liderazgo", max: 15 },
+  redaccion: { label: "Redaccion", max: 25 }
+};
+
+function ponderada(row) {
+  return Object.entries(criterios).reduce((sum, [key, item]) => sum + ((Number(row[key]) || 0) / item.max) * item.max, 0);
+}
+
 function mapDelegado(row) {
-  const calificacion = row.calificacion || {};
+  const cal = row.calificacion || {};
   return {
     id: row.id,
     nombre: row.nombre,
-    designacion: row.designacion,
-    comision: row.comision?.nombre || row.comision || "",
-    comisionId: row.comisionId || row.comision_id,
-    estado: calificacion.presenteEstado || calificacion.presente_estado || "presente_votando",
-    oratoria: calificacion.oratoria ?? 0,
-    argumentacion: calificacion.argumentacion ?? 0,
-    negociacion: calificacion.negociacion ?? 0,
-    liderazgo: calificacion.liderazgo ?? 0,
-    redaccion: calificacion.redaccion ?? 0,
-    pasa: Boolean(calificacion.pasaMinumeXvii ?? calificacion.pasa_minume_xvii),
-    mencion: calificacion.mencion || "",
-    feedback: calificacion.feedback || ""
+    apellido: row.apellido || "",
+    designacion: row.designacion || "",
+    comision: row.comision?.nombre || "",
+    comisionObj: row.comision || null,
+    comisionId: row.comisionId || row.comision_id || row.comision?.id || "",
+    avanza: Boolean(row.avanzaEtapa || row.avanza_etapa || cal.pasaMinumeXvii),
+    oratoria: cal.oratoria || 0,
+    argumentacion: cal.argumentacion || 0,
+    negociacion: cal.negociacion || 0,
+    liderazgo: cal.liderazgo || 0,
+    redaccion: cal.redaccion || 0,
+    mencion: cal.mencion || "",
+    feedback: cal.feedback || ""
   };
 }
 
-function mapAdmin(admin) {
-  return {
-    id: admin.id,
-    email: admin.email,
-    comision: admin.comision?.nombre || "Sin comisión",
-    comisionId: admin.comisionId || admin.comision_id,
-    estado: admin.estado === "activo" ? "Activo" : "Inactivo",
-    ultimoLogin: admin.ultimoLogin || admin.ultimo_login
-  };
+function exportExcel(filename, rows) {
+  const sheet = XLSX.utils.json_to_sheet(rows);
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, sheet, "Reporte");
+  XLSX.writeFile(book, filename);
 }
 
-function mapAudit(item) {
-  return {
-    id: item.id,
-    hora: new Date(item.createdAt || item.created_at || Date.now()).toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" }),
-    tipo: item.action || item.tipo,
-    usuario: item.user?.email || "Sistema",
-    detalle: item.changes ? JSON.stringify(item.changes) : item.detalle || item.entityType || "Movimiento registrado"
-  };
-}
-
-const criterios = {
-  oratoria: {
-    label: "Oratoria",
-    max: 15,
-    peso: 15,
-    niveles: [
-      ["Excelente", "13-15", "Cohesión, progresión temática, registro diplomático impecable y lenguaje no verbal persuasivo."],
-      ["Bueno", "10-12", "Comunica con coherencia, seguridad y estructura clara."],
-      ["Normal", "7-9", "Ideas comprensibles con fluidez limitada o presencia funcional."],
-      ["Regular", "4-6", "Fallas de fluidez, claridad o proyección; dependencia marcada de notas."],
-      ["Malo", "0-3", "Discurso sin estructura, poca proyección o comunicación no comprensible."]
-    ]
-  },
-  argumentacion: {
-    label: "Argumentación",
-    max: 25,
-    peso: 25,
-    niveles: [
-      ["Excelente", "22-25", "Argumentos efectivos, evidencia contrastada y cadena causal explícita."],
-      ["Bueno", "17-21", "Argumentos relevantes y bien construidos, con razonamiento seguible."],
-      ["Normal", "12-16", "Argumentos relevantes con fallas lógicas o simplificación."],
-      ["Regular", "6-11", "Predominan afirmaciones sin garantía ni evidencia suficiente."],
-      ["Malo", "0-5", "Contenido no relevante, sin estructura argumentativa ni evidencia."]
-    ]
-  },
-  negociacion: {
-    label: "Negociación",
-    max: 20,
-    peso: 20,
-    niveles: [
-      ["Excelente", "17-20", "Integra bloques, identifica intereses y lidera acuerdos realizables."],
-      ["Bueno", "13-16", "Negocia con flexibilidad, construye consensos y sostiene su postura."],
-      ["Normal", "9-12", "Participa aceptablemente, con iniciativa limitada para consensos amplios."],
-      ["Regular", "5-8", "Participación escasa, rígida o pasiva en la construcción de acuerdos."],
-      ["Malo", "0-4", "No participa o bloquea acuerdos sin fundamento."]
-    ]
-  },
-  liderazgo: {
-    label: "Liderazgo",
-    max: 15,
-    peso: 15,
-    niveles: [
-      ["Excelente", "13-15", "Liderazgo democrático, inclusivo y capaz de elevar el desempeño del bloque."],
-      ["Bueno", "10-12", "Influencia constructiva, escucha e integración sostenida."],
-      ["Normal", "7-9", "Iniciativa puntual, respeto y colaboración con influencia intermitente."],
-      ["Regular", "4-6", "Liderazgo limitado y actitud mayormente pasiva."],
-      ["Malo", "0-3", "Sin liderazgo o con actitud disruptiva."]
-    ]
-  },
-  redaccion: {
-    label: "Redacción",
-    max: 25,
-    peso: 25,
-    niveles: [
-      ["Excelente", "22-25", "Textos técnicos con cohesión, cláusulas precisas y fuentes confiables."],
-      ["Bueno", "17-21", "Buena estructura, cohesión y formato con pocas fallas."],
-      ["Normal", "12-16", "Comprensible, con estructura básica y fallas que no impiden lectura."],
-      ["Regular", "6-11", "Ideas desorganizadas, formato incorrecto o poco lenguaje técnico."],
-      ["Malo", "0-5", "No cumple estructura, formato ni registro mínimo."]
-    ]
-  }
-};
-
-const inicial = [
-  {
-    id: 1,
-    nombre: "Ana Isabel Duarte",
-    designacion: "República Dominicana",
-    comision: "Asamblea General",
-    estado: "presente_votando",
-    oratoria: 14,
-    argumentacion: 23,
-    negociacion: 18,
-    liderazgo: 14,
-    redaccion: 24,
-    pasa: true,
-    mencion: "Mejor Delegada",
-    feedback: "Excelente dominio del registro diplomático y liderazgo sostenido."
-  },
-  {
-    id: 2,
-    nombre: "Carlos Méndez",
-    designacion: "Francia",
-    comision: "Consejo de Seguridad",
-    estado: "presente_votando",
-    oratoria: 11,
-    argumentacion: 20,
-    negociacion: 15,
-    liderazgo: 10,
-    redaccion: 19,
-    pasa: false,
-    mencion: "",
-    feedback: "Buen avance argumentativo. Puede reforzar evidencia y cierre."
-  },
-  {
-    id: 3,
-    nombre: "Sofía Batista",
-    designacion: "Brasil",
-    comision: "Derechos Humanos",
-    estado: "presente_ausente",
-    oratoria: 9,
-    argumentacion: 16,
-    negociacion: 11,
-    liderazgo: 8,
-    redaccion: 15,
-    pasa: false,
-    mencion: "",
-    feedback: "Participación funcional con oportunidades claras de mayor iniciativa."
-  }
-];
-
-function calcularPonderada(row) {
-  return Object.entries(criterios).reduce((total, [key, meta]) => {
-    const valor = Number(row[key]) || 0;
-    return total + (valor / meta.max) * meta.peso;
-  }, 0);
-}
-
-function nivel(key, value) {
-  const valor = Number(value) || 0;
-  const niveles = criterios[key].niveles;
-  const encontrado = niveles.find(([, rango]) => {
-    const [min, max] = rango.split("-").map(Number);
-    return valor >= min && valor <= max;
-  });
-  return encontrado?.[0] || "Malo";
-}
-
-function criterioDetalle(row, key) {
-  const meta = criterios[key];
-  const valor = Number(row[key]) || 0;
-  const aporte = (valor / meta.max) * meta.peso;
-  return { ...meta, key, valor, aporte, nivel: nivel(key, valor) };
-}
-
-function estadoLabel(value) {
-  return value === "presente_votando" ? "Presente/Votando" : "Presente/Ausente";
-}
-
-function normalizarDelegado(item, index) {
-  const nombre = item.Nombre || item.nombre || item.Delegado || item.delegado || "";
-  const designacion = item.Designación || item.Designacion || item.designacion || item.Delegación || item.Delegacion || item.delegacion || "";
-  const comision = item.Comisión || item.Comision || item.comision || item.Comité || item.Comite || item.comite || "";
-
-  return {
-    id: Date.now() + index,
-    nombre: String(nombre).trim(),
-    designacion: String(designacion).trim(),
-    comision: String(comision).trim(),
-    estado: "presente_votando",
-    oratoria: 0,
-    argumentacion: 0,
-    negociacion: 0,
-    liderazgo: 0,
-    redaccion: 0,
-    pasa: false,
-    mencion: "",
-    feedback: ""
-  };
-}
-
-function crearMovimiento(tipo, detalle, usuario = "Superadmin") {
-  return {
-    id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    hora: new Date().toLocaleTimeString("es-DO", { hour: "2-digit", minute: "2-digit" }),
-    tipo,
-    usuario,
-    detalle
-  };
-}
-
-function LogoMark({ size = "md" }) {
+function LogoMark({ onClick }) {
   return (
-    <div className={`logo-mark ${size}`} aria-label="Logo institucional">
-      <img src={LOGO_SRC} alt="Logo SIGEL" />
+    <div className="logo-mark sm" onClick={onClick} style={onClick ? { cursor: "pointer" } : undefined}>
+      <img src={LOGO_SRC} alt="SIGEL CELIDER 10" />
     </div>
   );
 }
 
-function MetricCard({ icon: Icon, label, value, note }) {
-  return (
-    <article className="metric-card">
-      <Icon size={18} />
-      <span>{label}</span>
-      <strong>{value}</strong>
-      {note && <small>{note}</small>}
-    </article>
-  );
-}
-
-function exportarExcel(rows) {
-  const data = rows.map((row) => ({
-    Nombre: row.nombre,
-    Delegación: row.designacion,
-    Comisión: row.comision,
-    Estado: estadoLabel(row.estado),
-    Oratoria: row.oratoria,
-    Argumentación: row.argumentacion,
-    Negociación: row.negociacion,
-    Liderazgo: row.liderazgo,
-    Redacción: row.redaccion,
-    "Calificación Ponderada": calcularPonderada(row).toFixed(2),
-    Mención: row.mencion || "",
-    "Avanza / Reconocimiento": row.pasa ? "Sí" : "No",
-    Retroalimentación: row.feedback || ""
-  }));
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(data);
-  XLSX.utils.book_append_sheet(wb, ws, "Calificaciones");
-  XLSX.writeFile(wb, "SIGEL-calificaciones.xlsx");
-}
-
-function RubricasPanel() {
-  const [active, setActive] = useState("oratoria");
-  const meta = criterios[active];
-
-  return (
-    <aside className="rubric-panel">
-      <div className="section-heading compact">
-        <span>Rúbricas PLERD</span>
-        <h2>Criterios y puntaje</h2>
-        <p>Consulta el rango antes de asignar cada calificación.</p>
-      </div>
-      <div className="rubric-tabs">
-        {Object.entries(criterios).map(([key, item]) => (
-          <button
-            key={key}
-            className={active === key ? "active" : ""}
-            type="button"
-            onClick={() => setActive(key)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-      <div className="rubric-summary">
-        <strong>{meta.label}</strong>
-        <span>0-{meta.max} pts | Peso {meta.peso}%</span>
-      </div>
-      <div className="rubric-list">
-        {meta.niveles.map(([name, range, descriptor]) => (
-          <article key={name}>
-            <div>
-              <strong>{name}</strong>
-              <span>{range} pts</span>
-            </div>
-            <p>{descriptor}</p>
-          </article>
-        ))}
-      </div>
-    </aside>
-  );
-}
-
-function CalificacionesTable({ rows, setRows, scope = "all", onAudit }) {
-  const [filterOpen, setFilterOpen] = useState(true);
-  const [query, setQuery] = useState("");
-  const [delegacion, setDelegacion] = useState("Todas");
-  const baseRows = scope === "all" ? rows : rows.filter((row) => row.comision === scope);
-  const delegaciones = ["Todas", ...new Set(baseRows.map((row) => row.designacion).filter(Boolean))];
-  const visibles = baseRows.filter((row) => {
-    const q = query.trim().toLowerCase();
-    const matchesText = !q || row.nombre.toLowerCase().includes(q) || row.designacion.toLowerCase().includes(q);
-    const matchesDelegacion = delegacion === "Todas" || row.designacion === delegacion;
-    return matchesText && matchesDelegacion;
-  });
-
-  async function update(id, key, value) {
-    const delegado = rows.find((row) => row.id === id);
-    if (!delegado) return;
-    let nextValue = value;
-    if (criterios[key]) {
-      nextValue = Math.max(0, Math.min(Number(value), criterios[key].max));
-    }
-    setRows((actuales) =>
-      actuales.map((row) => {
-        if (row.id !== id) return row;
-        return { ...row, [key]: nextValue };
-      })
-    );
-
-    const apiKey = {
-      estado: "presente_estado",
-      pasa: "pasa_minume_xvii"
-    }[key] || key;
-
-    try {
-      await apiRequest(`/api/calificaciones/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ [apiKey]: nextValue })
-      });
-      if (onAudit) {
-        onAudit("Calificación actualizada", `${delegado.nombre} (${delegado.comision}): ${criterios[key]?.label || key} modificado.`);
-      }
-    } catch (error) {
-      onAudit?.("Error de guardado", `${delegado.nombre}: ${error.message}`);
-    }
-  }
-
-  return (
-    <div className="table-card">
-      <div className="table-title">
-        <div>
-          <span>Registro de evaluación</span>
-          <h2>Calificaciones por delegado</h2>
-        </div>
-        <div className="table-actions">
-          <button className="btn small ghost" type="button" onClick={() => setFilterOpen(!filterOpen)}>
-            <Filter size={15} /> Filtro
-          </button>
-          <button className="btn small ghost" type="button" onClick={() => exportarExcel(visibles)}>
-            <Download size={15} /> Exportar
-          </button>
-        </div>
-      </div>
-      {filterOpen && (
-        <div className="filter-panel">
-          <label>
-            Buscar por nombre o delegación
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Ejemplo: Ana, Francia, Brasil"
-            />
-          </label>
-          <label>
-            Delegación
-            <select value={delegacion} onChange={(event) => setDelegacion(event.target.value)}>
-              {delegaciones.map((item) => <option key={item}>{item}</option>)}
-            </select>
-          </label>
-          <div className="filter-count">
-            <strong>{visibles.length}</strong>
-            <span>delegados visibles</span>
-          </div>
-        </div>
-      )}
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Delegado</th>
-              <th>Comisión</th>
-              <th>Estado</th>
-              {Object.entries(criterios).map(([key, item]) => (
-                <th key={key}>{item.label}<small>0-{item.max}</small></th>
-              ))}
-              <th>Ponderada</th>
-              <th>Avanza</th>
-              <th>Mención / retroalimentación</th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibles.map((row) => (
-              <tr key={row.id}>
-                <td>
-                  <strong>{row.nombre}</strong>
-                  <span>{row.designacion}</span>
-                </td>
-                <td>{row.comision}</td>
-                <td>
-                  <select value={row.estado} onChange={(event) => update(row.id, "estado", event.target.value)}>
-                    <option value="presente_votando">Presente/Votando</option>
-                    <option value="presente_ausente">Presente/Ausente</option>
-                  </select>
-                </td>
-                {Object.keys(criterios).map((key) => (
-                  <td key={key}>
-                    <input
-                      className="score-input"
-                      type="number"
-                      min="0"
-                      max={criterios[key].max}
-                      value={row[key]}
-                      onChange={(event) => update(row.id, key, event.target.value)}
-                      aria-label={`${criterios[key].label} de ${row.nombre}`}
-                    />
-                    <small className={`level ${nivel(key, row[key]).toLowerCase()}`}>{nivel(key, row[key])}</small>
-                  </td>
-                ))}
-                <td>
-                  <strong className="score-total">{calcularPonderada(row).toFixed(2)}</strong>
-                  <span>de 100</span>
-                </td>
-                <td>
-                  <label className="switch-line">
-                    <input type="checkbox" checked={row.pasa} onChange={(event) => update(row.id, "pasa", event.target.checked)} />
-                    <span>{row.pasa ? "Sí" : "No"}</span>
-                  </label>
-                </td>
-                <td className="feedback-cell">
-                  {row.pasa && (
-                    <input
-                      value={row.mencion}
-                      maxLength="500"
-                      onChange={(event) => update(row.id, "mencion", event.target.value)}
-                      placeholder="Mención"
-                    />
-                  )}
-                  <textarea
-                    value={row.feedback}
-                    maxLength="500"
-                    onChange={(event) => update(row.id, "feedback", event.target.value)}
-                    placeholder="Retroalimentación individual"
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function PublicRanking({ rows, published }) {
-  const [query, setQuery] = useState("");
-  const [comision, setComision] = useState("Todas");
-  const comisiones = ["Todas", ...new Set(rows.map((row) => row.comision))];
-  const ranking = useMemo(() => {
-    return rows
-      .filter((row) => comision === "Todas" || row.comision === comision)
-      .filter((row) => row.nombre.toLowerCase().includes(query.toLowerCase()))
-      .sort((a, b) => calcularPonderada(b) - calcularPonderada(a));
-  }, [rows, query, comision]);
-
-  if (!published) {
-    return (
-      <section className="empty-state">
-        <ShieldCheck size={34} />
-        <h2>Resultados pendientes de publicación</h2>
-        <p>El ranking público se activará cuando el superadmin autorice la publicación final.</p>
-      </section>
-    );
-  }
-
-  return (
-    <section className="ranking-panel">
-      <div className="section-heading">
-        <span>Ranking público</span>
-        <h2>Resultados publicados</h2>
-      </div>
-      <div className="ranking-filters">
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar delegado" />
-        <select value={comision} onChange={(event) => setComision(event.target.value)}>
-          {comisiones.map((item) => <option key={item}>{item}</option>)}
-        </select>
-      </div>
-      <div className="ranking-list">
-        {ranking.map((row, index) => (
-          <article key={row.id}>
-            <strong>{index + 1}</strong>
-            <div>
-              <h3>{row.nombre}</h3>
-              <p>{row.designacion} | {row.comision}</p>
-            </div>
-            <span>{calcularPonderada(row).toFixed(2)}</span>
-            <em>{row.mencion || "Sin mención"}</em>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function UploadDelegados({ setRows, onAudit, onReload }) {
-  const [mensaje, setMensaje] = useState("Formato requerido: Nombre, Delegación, Comisión.");
-
-  async function handleUpload(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setMensaje("Subiendo y guardando listado en la base de datos...");
-      const formData = new FormData();
-      formData.append("file", file);
-      const result = await apiRequest("/api/delegados/import", { method: "POST", body: formData });
-      await onReload();
-      setMensaje(`${result.imported_count} delegados guardados en la base de datos desde ${file.name}.`);
-      onAudit("Listado importado", `${result.imported_count} delegados cargados desde Excel.`);
-    } catch (error) {
-      setMensaje(error.message);
-    } finally {
-      event.target.value = "";
-    }
-  }
-
-  return (
-    <article className="upload-card">
-      <div className="section-heading compact">
-        <span>Importación inicial</span>
-        <h2>Subir listado de delegados</h2>
-        <p>Carga un archivo `.xlsx` con las columnas exactas: Nombre, Delegación y Comisión.</p>
-      </div>
-      <label className="file-drop">
-        <Upload size={20} />
-        <span>Seleccionar archivo Excel</span>
-        <input type="file" accept=".xlsx,.xls" onChange={handleUpload} />
-      </label>
-      <p className="helper-text">{mensaje}</p>
-    </article>
-  );
-}
-
-function CommitteeDashboard({ rows, auditLog }) {
-  const resumen = [...new Set(rows.map((row) => row.comision))].map((comision) => {
-    const delegados = rows.filter((row) => row.comision === comision);
-    const calificados = delegados.filter((row) => calcularPonderada(row) > 0).length;
-    const promedio = delegados.length ? delegados.reduce((sum, row) => sum + calcularPonderada(row), 0) / delegados.length : 0;
-    const movimientos = auditLog.filter((item) => item.detalle.includes(comision)).length;
-    const progreso = delegados.length ? (calificados / delegados.length) * 100 : 0;
-    return { comision, delegados: delegados.length, calificados, promedio, movimientos, progreso };
-  });
-  const maxMovimientos = Math.max(1, ...resumen.map((item) => item.movimientos));
-  const promedioGeneral = rows.length ? rows.reduce((sum, row) => sum + calcularPonderada(row), 0) / rows.length : 0;
-  const evaluados = rows.filter((row) => calcularPonderada(row) > 0).length;
-  const avanceGeneral = rows.length ? (evaluados / rows.length) * 100 : 0;
-
-  return (
-    <section className="charts-dashboard">
-      <div className="chart-summary">
-        <article>
-          <div className="donut" style={{ "--value": `${avanceGeneral}%` }}>
-            <strong>{avanceGeneral.toFixed(0)}%</strong>
-          </div>
-          <span>Avance general</span>
-        </article>
-        <article>
-          <div className="donut average" style={{ "--value": `${promedioGeneral}%` }}>
-            <strong>{promedioGeneral.toFixed(0)}</strong>
-          </div>
-          <span>Promedio general</span>
-        </article>
-      </div>
-      <div className="committee-grid">
-        {resumen.map((item) => (
-          <article key={item.comision}>
-            <div>
-              <strong>{item.comision}</strong>
-              <span>{item.calificados}/{item.delegados} evaluados</span>
-            </div>
-            <div className="chart-row">
-              <span>Progreso</span>
-              <div className="progress-track">
-                <span style={{ width: `${item.progreso}%` }} />
-              </div>
-              <strong>{item.progreso.toFixed(0)}%</strong>
-            </div>
-            <div className="chart-row">
-              <span>Promedio</span>
-              <div className="progress-track score">
-                <span style={{ width: `${item.promedio}%` }} />
-              </div>
-              <strong>{item.promedio.toFixed(1)}</strong>
-            </div>
-            <div className="chart-row">
-              <span>Movimientos</span>
-              <div className="progress-track motion">
-                <span style={{ width: `${(item.movimientos / maxMovimientos) * 100}%` }} />
-              </div>
-              <strong>{item.movimientos}</strong>
-            </div>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function AdminUsersPanel({ rows, admins, setAdmins, onAudit, onReload }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [comision, setComision] = useState("");
-  const comisiones = [...new Set(rows.map((row) => row.comision))];
-
-  async function addAdmin(event) {
-    event.preventDefault();
-    if (!email || !password || !comision) return;
-    const selected = rows.find((row) => row.comision === comision);
-    try {
-      await apiRequest("/api/admins", {
-        method: "POST",
-        body: JSON.stringify({ email, password, comision_id: selected?.comisionId })
-      });
-      await onReload();
-      setEmail("");
-      setPassword("");
-      setComision("");
-      onAudit("Admin asignado", `${email} fue asignado a ${comision} con contraseña definida por superadmin.`);
-    } catch (error) {
-      onAudit("Error al asignar admin", error.message);
-    }
-  }
-
-  return (
-    <article className="admin-users-card">
-      <div className="section-heading compact">
-        <span>Usuarios por comisión</span>
-        <h2>Asignar administradores</h2>
-      </div>
-      <form className="inline-form" onSubmit={addAdmin}>
-        <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="correo@institucion.edu.do" />
-        <input
-          type="password"
-          value={password}
-          minLength="8"
-          onChange={(event) => setPassword(event.target.value)}
-          placeholder="Contraseña inicial"
-        />
-        <select value={comision} onChange={(event) => setComision(event.target.value)}>
-          <option value="">Seleccionar comisión</option>
-          {comisiones.map((item) => <option key={item}>{item}</option>)}
-        </select>
-        <button className="btn primary" type="submit"><UserPlus size={15} /> Asignar</button>
-      </form>
-      <div className="admin-list">
-        {admins.map((admin) => (
-          <div key={admin.id}>
-            <strong>{admin.email}</strong>
-            <span>{admin.comision} | {admin.estado} | contraseña definida</span>
-          </div>
-        ))}
-      </div>
-    </article>
-  );
-}
-
-function AuditPanel({ auditLog }) {
-  return (
-    <article className="audit-card">
-      <div className="section-heading compact">
-        <span>Observación y auditoría</span>
-        <h2>Movimientos recientes</h2>
-        <p>Vista para supervisar accesos, carga de datos, asignaciones y modificaciones.</p>
-      </div>
-      <div className="audit-list">
-        {auditLog.map((item) => (
-          <div key={item.id}>
-            <time>{item.hora}</time>
-            <strong>{item.tipo}</strong>
-            <p>{item.detalle}</p>
-            <span>{item.usuario}</span>
-          </div>
-        ))}
-      </div>
-    </article>
-  );
-}
-
-function Dashboard({ user, rows, setRows, published, setPublished, active, setActive, onLogout, auditLog, onAudit, admins, setAdmins, onReload }) {
-  const calificados = rows.filter((row) => calcularPonderada(row) > 0).length;
-  const promedio = rows.length ? rows.reduce((sum, row) => sum + calcularPonderada(row), 0) / rows.length : 0;
-  const comisiones = new Set(rows.map((row) => row.comision)).size;
-
-  async function togglePublished() {
-    const next = !published;
-    try {
-      await apiRequest("/api/config/publish", { method: "PATCH", body: JSON.stringify({ publish: next }) });
-      setPublished(next);
-      onAudit(next ? "Resultados publicados" : "Resultados ocultados", `La consulta publica fue ${next ? "activada" : "desactivada"}.`);
-    } catch (error) {
-      onAudit("Error de publicación", error.message);
-    }
-  }
-  const isSuperadmin = user.role === "superadmin";
-
-  return (
-    <div className="app-shell">
-      <header className="app-header">
-        <div className="brand">
-          <LogoMark size="sm" />
-          <div>
-            <strong>SIGEL CELIDER 10</strong>
-            <span>Panel administrativo de evaluación</span>
-          </div>
-        </div>
-        <nav className="nav-actions" aria-label="Secciones administrativas">
-          <button className={active === "dashboard" ? "active" : ""} onClick={() => setActive("dashboard")} type="button">Resumen</button>
-          {isSuperadmin && <button className={active === "importar" ? "active" : ""} onClick={() => setActive("importar")} type="button">Importar</button>}
-          {isSuperadmin && <button className={active === "usuarios" ? "active" : ""} onClick={() => setActive("usuarios")} type="button">Usuarios</button>}
-          <button className={active === "calificar" ? "active" : ""} onClick={() => setActive("calificar")} type="button">Calificar</button>
-          <button className={active === "rubricas" ? "active" : ""} onClick={() => setActive("rubricas")} type="button">Rúbricas</button>
-          {isSuperadmin && <button className={active === "auditoria" ? "active" : ""} onClick={() => setActive("auditoria")} type="button">Auditoría</button>}
-          <button className={active === "ranking" ? "active" : ""} onClick={() => setActive("ranking")} type="button">Ranking</button>
-        </nav>
-        <div className="header-actions">
-          <span className="role-pill">{user.role}</span>
-          <button className="icon-btn" type="button" onClick={onLogout} aria-label="Cerrar sesión">
-            <LogOut size={17} />
-          </button>
-        </div>
-      </header>
-
-      <main className="workspace">
-        <section className="admin-hero">
-          <div>
-            <span>Administración oficial</span>
-            <h1>Evaluación precisa para SIGEL CELIDER 10</h1>
-            <p>Gestiona delegados, controla la publicación y califica con rúbricas visibles para mantener consistencia académica.</p>
-          </div>
-          <div className="admin-controls">
-            {isSuperadmin && <button className="btn primary" type="button" onClick={togglePublished}>
-              <CheckCircle2 size={16} /> {published ? "Ocultar resultados" : "Publicar resultados"}
-            </button>}
-            <button className="btn secondary" type="button" onClick={() => exportarExcel(rows)}>
-              <FileSpreadsheet size={16} /> Excel general
-            </button>
-          </div>
-        </section>
-
-        {active === "dashboard" && (
-          <>
-            <section className="metrics-grid">
-              <MetricCard icon={Users} label="Delegados" value={rows.length} note={`${comisiones} comisiones activas`} />
-              <MetricCard icon={Gauge} label="Progreso" value={`${calificados}/${rows.length}`} note="Registros con puntaje" />
-              <MetricCard icon={BarChart3} label="Promedio" value={promedio.toFixed(2)} note="Ponderada general" />
-              <MetricCard icon={Trophy} label="Publicación" value={published ? "Activa" : "Pendiente"} note="Consulta pública" />
-            </section>
-            <section className="admin-grid">
-              <article className="activity-card">
-                <div className="section-heading compact">
-                  <span>Dashboard en tiempo real</span>
-                  <h2>Movimiento por comité</h2>
-                </div>
-                <CommitteeDashboard rows={rows} auditLog={auditLog} />
-              </article>
-              <AuditPanel auditLog={auditLog.slice(0, 5)} />
-            </section>
-          </>
-        )}
-
-        {active === "importar" && (
-          <section className="admin-grid">
-            <UploadDelegados setRows={setRows} onAudit={onAudit} onReload={onReload} />
-            <article className="activity-card">
-              <div className="section-heading compact">
-                <span>Formato requerido</span>
-                <h2>Columnas del Excel</h2>
-              </div>
-              <p>Fila 1: Nombre | Delegación | Comisión.</p>
-              <p>Cada fila siguiente representa un delegado. Al importar, el sistema crea los registros con criterios en cero para comenzar la evaluación.</p>
-              <p>Después de subir el listado, entra a Usuarios para asignar administradores por comisión.</p>
-            </article>
-          </section>
-        )}
-
-        {active === "usuarios" && (
-          <AdminUsersPanel rows={rows} admins={admins} setAdmins={setAdmins} onAudit={onAudit} onReload={onReload} />
-        )}
-
-        {active === "calificar" && (
-          <section className="evaluation-layout">
-            <CalificacionesTable rows={rows} setRows={setRows} onAudit={onAudit} />
-            <RubricasPanel />
-          </section>
-        )}
-
-        {active === "rubricas" && <RubricasPanel />}
-        {active === "auditoria" && <AuditPanel auditLog={auditLog} />}
-        {active === "ranking" && <PublicRanking rows={rows} published={published} />}
-      </main>
-    </div>
-  );
-}
-
-function HomePage({ rows, published, onNavigate }) {
-  const [displayName, setDisplayName] = useState("");
-  const [searchName, setSearchName] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-
-  const results = useMemo(() => {
-    const q = searchName.toLowerCase().trim();
-    if (!q) return [];
-    return rows.filter((row) => row.nombre.toLowerCase().includes(q));
-  }, [rows, searchName]);
-
-  const calificados = rows.filter((row) => calcularPonderada(row) > 0).length;
-  const comisiones = new Set(rows.map((row) => row.comision)).size;
-  const top = [...rows].sort((a, b) => calcularPonderada(b) - calcularPonderada(a)).slice(0, 3);
-
-  function submitSearch() {
-    if (!displayName.trim()) return;
-    setSearchName(displayName);
-    setSubmitted(true);
-  }
-
-  return (
-    <main className="home-shell">
-      <header className="home-topbar">
-        <div className="brand inverse">
-          <LogoMark size="sm" />
-          <div>
-            <strong>SIGEL CELIDER 10</strong>
-            <span>Sistema de Gestión y Evaluación de Liderazgo</span>
-          </div>
-        </div>
-        <button className="btn small light" type="button" onClick={() => onNavigate("login")}>
-          <Lock size={14} /> Admin
-        </button>
-      </header>
-
-      <section className="home-hero">
-        <div className="home-copy">
-          <span>Plataforma oficial CELIDER</span>
-          <h1>SIGEL CELIDER 10</h1>
-          <p>Consulta tus criterios evaluados, calificación por criterio y retroalimentación cuando la comisión administrativa publique los resultados.</p>
-          <div className="hero-search-box">
-            <input
-              type="text"
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-              placeholder="Escribe tu nombre completo"
-              aria-label="Buscar delegado por nombre"
-              onKeyDown={(event) => {
-                if (event.key === "Enter") submitSearch();
-              }}
-            />
-            <button className="icon-btn bright" type="button" disabled={!displayName.trim()} onClick={submitSearch} aria-label="Buscar">
-              <Search size={19} />
-            </button>
-          </div>
-          <small>Los resultados solo aparecen cuando el superadmin activa la publicación oficial.</small>
-        </div>
-
-        <div className="home-status">
-          <div className="home-logo-lock">
-            <LogoMark size="md" />
-            <div>
-              <span>CELIDER</span>
-              <strong>Regional 10</strong>
-            </div>
-          </div>
-          <div className="status-header">
-            <SlidersHorizontal size={18} />
-            <span>Estado del sistema</span>
-          </div>
-          <strong>{published ? "Publicado" : "En revisión"}</strong>
-          <p>{calificados} de {rows.length} delegados cuentan con calificación registrada.</p>
-          <div className="mini-stats">
-            <span>{rows.length}<small>Delegados</small></span>
-            <span>{comisiones}<small>Comisiones</small></span>
-            <span>100<small>Puntos máx.</small></span>
-          </div>
-        </div>
-      </section>
-
-      {submitted && (
-        <section className="results-section">
-          <div className="section-heading">
-            <span>Consulta pública</span>
-            <h2>Resultados de búsqueda</h2>
-          </div>
-          {!published ? (
-            <div className="empty-state dark">
-              <ShieldCheck size={32} />
-              <h3>Resultados no publicados</h3>
-              <p>La información estará disponible después de la autorización del superadmin.</p>
-            </div>
-          ) : results.length > 0 ? (
-            <div className="results-grid">
-              {results.map((row) => (
-                <article key={row.id} className="result-card">
-                  <div>
-                    <h3>{row.nombre}</h3>
-                    <p>{row.designacion} | {row.comision}</p>
-                  </div>
-                  <strong>{calcularPonderada(row).toFixed(2)}<span> pts</span></strong>
-                  <div className="result-criteria">
-                    {Object.keys(criterios).map((key) => {
-                      const item = criterioDetalle(row, key);
-                      return (
-                        <div key={key}>
-                          <span>{item.label}</span>
-                          <strong>{item.valor}/{item.max}</strong>
-                          <small>{item.nivel} | aporta {item.aporte.toFixed(2)}</small>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <dl>
-                    <div><dt>Nombre</dt><dd>{row.nombre}</dd></div>
-                    <div><dt>Delegación</dt><dd>{row.designacion}</dd></div>
-                    <div><dt>Comisión</dt><dd>{row.comision}</dd></div>
-                    <div><dt>Mención</dt><dd>{row.mencion || "Sin mención"}</dd></div>
-                    <div><dt>Retroalimentación</dt><dd>{row.feedback || "Sin retroalimentación registrada"}</dd></div>
-                  </dl>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state dark">
-              <Search size={32} />
-              <h3>No se encontró ningún delegado</h3>
-              <p>Verifica el nombre y vuelve a intentar.</p>
-            </div>
-          )}
-        </section>
-      )}
-
-      <section className="public-preview">
-        <div className="section-heading">
-          <span>Vista institucional</span>
-          <h2>{published ? "Ranking destacado" : "Criterios de evaluación"}</h2>
-        </div>
-        {published ? (
-          <div className="preview-list">
-            {top.map((row, index) => (
-              <article key={row.id}>
-                <strong>{index + 1}</strong>
-                <div>
-                  <h3>{row.nombre}</h3>
-                  <p>{row.comision}</p>
-                </div>
-                <span>{calcularPonderada(row).toFixed(2)}</span>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="criteria-strip">
-            {Object.values(criterios).map((item) => (
-              <article key={item.label}>
-                <strong>{item.label}</strong>
-                <span>0-{item.max} pts</span>
-                <small>Peso {item.peso}%</small>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
-    </main>
-  );
-}
-
-function LoginPage({ onLogin, onBack }) {
+function LoginPage({ onLogin, onBackToHome }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(event) {
+  async function submit(event) {
     event.preventDefault();
-    if (!email || !password) {
-      setError("Ingresa correo y contraseña para continuar.");
-      return;
-    }
     setError("");
     setLoading(true);
     try {
-      const data = await apiRequest("/api/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email, password })
-      });
+      const data = await apiRequest("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
       setAccessToken(data.access_token);
-      setLoading(false);
       onLogin(data.user);
-    } catch (error) {
+    } catch (err) {
+      setError(err.message);
+    } finally {
       setLoading(false);
-      setError(error.message);
     }
   }
 
@@ -1073,148 +144,692 @@ function LoginPage({ onLogin, onBack }) {
     <main className="login-shell">
       <section className="login-card">
         <div className="login-brand">
-          <LogoMark />
+          <LogoMark onClick={onBackToHome} />
           <div>
-            <span>Acceso administrativo</span>
-            <h1>Ingreso seguro</h1>
-            <p>Usa tus credenciales institucionales para administrar evaluaciones y publicación.</p>
+            <span>Acceso privado</span>
+            <h1>SIGEL CELIDER 10</h1>
+            <p>Panel seguro para Regional 10, distritos y mesas directivas.</p>
           </div>
         </div>
-        <form className="login-form" onSubmit={handleSubmit}>
-          <label>
-            Correo institucional
-            <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="admin@celider10.edu.do" autoComplete="email" />
-          </label>
-          <label>
-            Contraseña
-            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="********" autoComplete="current-password" />
-          </label>
+        <form className="login-form" onSubmit={submit}>
+          <label>Correo institucional<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
+          <label>Contrasena<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></label>
           {error && <p className="form-error">{error}</p>}
-          <button type="submit" className="btn primary full" disabled={loading}>
-            <Lock size={16} /> {loading ? "Ingresando..." : "Ingresar"}
-          </button>
-          <button type="button" className="btn secondary full" onClick={onBack}>
-            Volver al inicio
-          </button>
+          <button className="btn primary full" disabled={loading}><Lock size={16} /> {loading ? "Validando..." : "Ingresar"}</button>
+          <button type="button" className="btn secondary full" style={{ marginTop: "10px" }} onClick={onBackToHome}>Volver al inicio</button>
         </form>
       </section>
     </main>
   );
 }
 
-function App() {
-  const [user, setUser] = useState(null);
-  const [page, setPage] = useState("home");
-  const [active, setActive] = useState("dashboard");
-  const [published, setPublished] = useState(false);
-  const [rows, setRows] = useState([]);
-  const [admins, setAdmins] = useState([]);
-  const [auditLog, setAuditLog] = useState([
-    crearMovimiento("Sistema iniciado", "Conectando con la base de datos SIGEL CELIDER 10.", "Sistema")
-  ]);
+function PrivateHome({ goLogin }) {
+  const [align, setAlign] = useState(() => localStorage.getItem("sigel-align") || "left");
+  useEffect(() => { document.documentElement.dataset.theme = "light"; localStorage.removeItem("sigel-theme"); }, []);
+  useEffect(() => { document.documentElement.dataset.align = align; localStorage.setItem("sigel-align", align); }, [align]);
+  return (
+    <main className="home-shell private-home">
+      <header className="home-topbar">
+        <div className="brand inverse"><LogoMark /><div><strong>SIGEL CELIDER 10</strong><span>Regional 10</span></div></div>
+        <div className="home-controls"><button className="icon-btn" onClick={() => setAlign((value) => value === "left" ? "right" : "left")} aria-label="Cambiar alineación">{align === "left" ? <AlignRight size={16} /> : <AlignLeft size={16} />}</button><button className="btn small light" onClick={goLogin}><Lock size={14} /> Iniciar sesión</button></div>
+      </header>
+      <section className="home-hero private">
+        <div className="home-copy">
+          <span>Plataforma institucional privada</span>
+          <h1>Gestion de eventos, asistencia y evaluaciones CELIDER</h1>
+          <p>Gestiona eventos, delegados, comisiones y evaluaciones desde una plataforma institucional segura.</p>
+          <button className="btn primary" onClick={goLogin}><ShieldCheck size={16} /> Acceder al panel</button>
+        </div>
+        <div className="home-status">
+          <div className="status-header"><ShieldCheck size={18} /><span>Operación institucional</span></div>
+          <strong>Gestión segura</strong>
+          <p>Usuarios por rol, asignaciones por distrito y comisiones, auditoría y datos protegidos.</p>
+          <div className="mini-stats">{DISTRITOS.map((d) => <span key={d}>{d}<small>Distrito</small></span>)}</div>
+        </div>
+      </section>
+    </main>
+  );
+}
 
-  async function loadPublicState() {
-    const status = await apiRequest("/api/config/publish-status");
-    setPublished(Boolean(status.published));
-    if (status.published) {
-      const ranking = await apiRequest("/api/ranking/general");
-      setRows(ranking.map(mapDelegado));
-    } else {
-      setRows([]);
+function Metric({ icon: Icon, label, value, note }) {
+  return <article className="metric-card"><Icon size={18} /><span>{label}</span><strong>{value}</strong><small>{note}</small></article>;
+}
+
+function EventosPanel({ user, eventos, setEventos, distritos, onReload, setEventoActivo }) {
+  const [nombre, setNombre] = useState("");
+  const [fecha, setFecha] = useState("");
+  const [distritoId, setDistritoId] = useState("");
+  const canCreate = ["superadmin", "distrito"].includes(user.role);
+
+  async function createEvento(event) {
+    event.preventDefault();
+    const tempNombre = nombre;
+    const tempFecha = fecha;
+    const tempDistritoId = distritoId;
+
+    // Reset inputs immediately
+    setNombre("");
+    setFecha("");
+
+    const tempEvent = {
+      id: "temp-" + Date.now(),
+      nombre: tempNombre,
+      fecha: tempFecha || null,
+      distrito: distritos.find((d) => d.id === Number(tempDistritoId)) || null,
+      _count: { delegados: 0, comisiones: 0 }
+    };
+
+    setEventos((current) => [tempEvent, ...current]);
+
+    try {
+      await apiRequest("/api/eventos", {
+        method: "POST",
+        body: JSON.stringify({
+          nombre: tempNombre,
+          fecha: tempFecha || undefined,
+          distrito_id: tempDistritoId ? Number(tempDistritoId) : undefined
+        })
+      });
+      await onReload();
+    } catch (error) {
+      setEventos((current) => current.filter((e) => e.id !== tempEvent.id));
+      setNombre(tempNombre);
+      setFecha(tempFecha);
+      window.alert(error.message);
     }
   }
 
-  async function loadAdminState(currentUser = user) {
-    const [delegados, status] = await Promise.all([
-      apiRequest("/api/delegados"),
-      apiRequest("/api/config/publish-status")
-    ]);
-    setRows(delegados.map(mapDelegado));
-    setPublished(Boolean(status.published));
-    if (currentUser?.role === "superadmin") {
-      const [adminRows, audits] = await Promise.all([
-        apiRequest("/api/admins"),
-        apiRequest("/api/audit")
-      ]);
-      setAdmins(adminRows.map(mapAdmin));
-      setAuditLog(audits.map(mapAudit));
+  async function deleteEvento(id) {
+    if (!confirm("Eliminar este evento y sus datos asociados?")) return;
+    const previous = [...eventos];
+    setEventos((current) => current.filter((e) => e.id !== id));
+    try {
+      await apiRequest(`/api/eventos/${id}`, { method: "DELETE" });
+      await onReload();
+    } catch (error) {
+      setEventos(previous);
+      window.alert(error.message);
     }
   }
 
-  React.useEffect(() => {
-    loadPublicState().catch(() => {
-      setRows([]);
+  return (
+    <section className="admin-grid">
+      <article className="activity-card">
+        <div className="section-heading compact"><span>Eventos</span><h2>Eventos por distrito</h2></div>
+        {canCreate && (
+          <form className="inline-form" onSubmit={createEvento}>
+            <label>Nombre<input value={nombre} onChange={(e) => setNombre(e.target.value)} required maxLength={180} /></label>
+            <label>Fecha<input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></label>
+            {user.role === "superadmin" && <label>Distrito<select value={distritoId} onChange={(e) => setDistritoId(e.target.value)} required><option value="">Seleccionar</option>{distritos.map((d) => <option key={d.id} value={d.id}>{d.codigo}</option>)}</select></label>}
+            <button className="btn primary"><Plus size={15} /> Crear</button>
+          </form>
+        )}
+        <div className="admin-list">
+          {eventos.map((evento) => (
+            <div key={evento.id} className="row-actions">
+              <button className="link-row" onClick={() => setEventoActivo(evento)}>
+                <strong>{evento.nombre}</strong>
+                <span>{evento.distrito?.codigo} | {evento.fecha ? new Date(evento.fecha).toLocaleDateString("es-DO") : "Sin fecha"} | {evento._count?.delegados || 0} delegados | {evento._count?.comisiones || 0} comisiones</span>
+              </button>
+              {canCreate && <button className="icon-btn danger" onClick={() => deleteEvento(evento.id)} aria-label="Eliminar evento"><Trash2 size={16} /></button>}
+            </div>
+          ))}
+        </div>
+      </article>
+      <article className="activity-card">
+        <div className="section-heading compact"><span>Limite operativo</span><h2>Hasta 30 eventos</h2></div>
+        <p>Cada distrito puede mantener hasta 30 eventos. El regional visualiza todo, pero no altera la data distrital.</p>
+      </article>
+    </section>
+  );
+}
+
+function EventoDetalle({ evento, onBack }) {
+  const [delegados, setDelegados] = useState([]);
+  const [comisionId, setComisionId] = useState("");
+  const [paisQuery, setPaisQuery] = useState("");
+  const [paises, setPaises] = useState([]);
+  const [customCountry, setCustomCountry] = useState("");
+  const [customCountries, setCustomCountries] = useState(() => JSON.parse(localStorage.getItem("sigel-paises") || "[]"));
+  const [modo, setModo] = useState("individual");
+  const comisiones = useMemo(() => {
+    const map = new Map();
+    delegados.forEach((d) => {
+      if (d.comisionId && !map.has(d.comisionId)) {
+        map.set(d.comisionId, d.comisionObj || d.comision);
+      }
     });
-  }, []);
+    return [...map.entries()].map(([id, val]) => ({
+      id,
+      nombre: typeof val === "string" ? val : val.nombre,
+      modoAsignacion: typeof val === "object" ? val.modoAsignacion : "individual"
+    }));
+  }, [delegados]);
 
-  React.useEffect(() => {
-    async function restoreSession() {
+  useEffect(() => {
+    if (comisionId) {
+      const selectedCom = comisiones.find((c) => Number(c.id) === Number(comisionId));
+      if (selectedCom) {
+        setModo(selectedCom.modoAsignacion || "individual");
+      }
+    }
+  }, [comisionId, comisiones]);
+
+  const presentes = delegados.filter((d) => d.asistencia === "presente_votando");
+
+  async function load() {
+    const data = await apiRequest(`/api/eventos/${evento.id}/delegados`);
+    setDelegados(data.map(mapDelegado));
+  }
+
+  useEffect(() => {
+    load().catch((error) => window.alert(error.message));
+    const timer = window.setInterval(() => load().catch(console.error), 5000);
+    return () => window.clearInterval(timer);
+  }, [evento.id]);
+
+  async function upload(kind, file) {
+    if (!file) return;
+    const body = new FormData();
+    body.append("file", file);
+    try {
+      const res = await apiRequest(`/api/eventos/${evento.id}/import/${kind}`, { method: "POST", body });
+      await load();
+      if (res.errors && res.errors.length > 0) {
+        window.alert(`Importación completada con algunos errores:\n${res.errors.map((e) => `Fila ${e.row}: ${e.error}`).join("\n")}`);
+      } else {
+        window.alert(`¡Importación exitosa! Se cargaron ${res.imported_count} registros.`);
+      }
+    } catch (error) {
+      window.alert(error.message);
+    }
+  }
+
+  async function updateAsistencia(id, estado) {
+    const previous = [...delegados];
+    setDelegados((current) => current.map((d) => d.id === id ? { ...d, asistencia: estado } : d));
+    try {
+      await apiRequest(`/api/eventos/${evento.id}/asistencia/${id}`, { method: "PATCH", body: JSON.stringify({ estado }) });
+      await load();
+    } catch (error) {
+      setDelegados(previous);
+      window.alert(error.message);
+    }
+  }
+
+  async function updateCalificacion(id, key, value) {
+    let nextValue = value;
+    if (criterios[key]) {
+      nextValue = Math.max(0, Math.min(Number(value), criterios[key].max));
+    }
+    const previous = [...delegados];
+    setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: nextValue } : d));
+    try {
+      await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: nextValue }) });
+      await load();
+    } catch (error) {
+      setDelegados(previous);
+      window.alert(error.message);
+    }
+  }
+
+  async function updateAvanza(id, avanza) {
+    const previous = [...delegados];
+    setDelegados((current) => current.map((d) => d.id === id ? { ...d, avanza } : d));
+    try {
+      await apiRequest(`/api/eventos/${evento.id}/avanza/${id}`, { method: "PATCH", body: JSON.stringify({ avanza }) });
+      await load();
+    } catch (error) {
+      setDelegados(previous);
+      window.alert(error.message);
+    }
+  }
+
+  async function asignar() {
+    try { await apiRequest(`/api/eventos/${evento.id}/asignar`, { method: "POST", body: JSON.stringify({ comision_id: Number(comisionId), modo, paises }) }); await load(); } catch (error) { window.alert(error.message); }
+  }
+
+  function exportEvento() {
+    exportExcel(`SIGEL-${evento.nombre}.xlsx`, delegados.map((d) => ({
+      Nombre: d.nombre,
+      Comision: d.comision,
+      Designacion: d.designacion,
+      Asistencia: d.asistencia,
+      Ponderada: ponderada(d).toFixed(2),
+      Avanza: d.avanza ? "Si" : "No"
+    })));
+  }
+
+  const allCountries = [...new Set([...PAISES, ...customCountries])].sort((a, b) => a.localeCompare(b));
+  const paisesVisibles = useMemo(() => {
+    const selectedSet = new Set(paises);
+    const filtered = allCountries.filter((p) => p.toLowerCase().includes(paisQuery.toLowerCase()));
+    const combined = [...paises, ...filtered.filter((p) => !selectedSet.has(p))];
+    return combined.slice(0, 32);
+  }, [allCountries, paises, paisQuery]);
+
+  async function clearDelegados() {
+    if (!window.confirm("¿Seguro que deseas eliminar todos los delegados importados de este evento?")) return;
+    try {
+      await apiRequest(`/api/eventos/${evento.id}/delegados`, { method: "DELETE" });
+      await load();
+    } catch (error) { window.alert(error.message); }
+  }
+
+  async function clearComisiones() {
+    if (!window.confirm("¿Seguro que deseas eliminar todas las comisiones (y delegados) importados de este evento?")) return;
+    try {
+      await apiRequest(`/api/eventos/${evento.id}/comisiones`, { method: "DELETE" });
+      await load();
+    } catch (error) { window.alert(error.message); }
+  }
+
+  async function guardarModoComision() {
+    if (!comisionId) return;
+    try {
+      await apiRequest(`/api/eventos/${evento.id}/comisiones/${comisionId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ modo })
+      });
+      await load();
+      window.alert("Modo de asignación de la comisión guardado correctamente.");
+    } catch (error) { window.alert(error.message); }
+  }
+
+  function addCountry(event) {
+    event.preventDefault();
+    const name = customCountry.trim();
+    if (!name || allCountries.some((country) => country.toLowerCase() === name.toLowerCase())) return;
+    const next = [...customCountries, name];
+    setCustomCountries(next);
+    localStorage.setItem("sigel-paises", JSON.stringify(next));
+    setPaises((x) => x.includes(name) ? x : [...x, name]);
+    setCustomCountry("");
+  }
+
+  return (
+    <section className="activity-card">
+      <div className="table-title">
+        <div><span>Evento activo</span><h2>{evento.nombre}</h2></div>
+        <div className="table-actions">
+          <button className="btn secondary" onClick={onBack}>Volver</button>
+          <button className="btn secondary" onClick={exportEvento}><Download size={15} /> Excel</button>
+          <button className="btn secondary" onClick={() => window.print()}><Download size={15} /> PDF</button>
+        </div>
+      </div>
+      
+      <div className="excel-help-card">
+        <div className="excel-help-header">
+          <FileSpreadsheet size={16} />
+          <h4>Reglas para Carga de Documentación Excel (Siga el orden obligatorio)</h4>
+        </div>
+        <div className="excel-help-content">
+          <div className="excel-help-col highlighted-col">
+            <h5>⚠️ PASO 1: Subir Comisiones Primero</h5>
+            <ul>
+              <li>El archivo debe estar en formato <code>.xlsx</code>.</li>
+              <li>Columna obligatoria en la primera fila: <code>comisiones</code>.</li>
+              <li><strong>Regla de oro:</strong> Cree y suba las comisiones primero. Si no existen las comisiones en el evento, el archivo de delegados rebotará con error.</li>
+            </ul>
+          </div>
+          <div className="excel-help-col">
+            <h5>PASO 2: Subir Delegados Después</h5>
+            <ul>
+              <li>El archivo debe estar en formato <code>.xlsx</code>.</li>
+              <li>Columna obligatoria en la primera fila: <code>nombre</code>. No se requieren más columnas obligatorias.</li>
+              <li><strong>Importante:</strong> Debe escribir el **nombre completo** del delegado en esta columna.</li>
+              <li>El sistema detectará automáticamente el primer apellido del nombre completo para realizar la asignación de Corte ("Su Excelencia [Apellido]").</li>
+              <li>No use fórmulas de Excel ni caracteres maliciosos.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div className="event-tools">
+        <div className="tool-upload-group">
+          <label className="file-drop"><Upload size={18} /> Subir comisiones Excel<input type="file" accept=".xlsx" onChange={(e) => upload("comisiones", e.target.files?.[0])} /></label>
+          {comisiones.length > 0 && <button className="btn danger small-btn" onClick={clearComisiones}><Trash2 size={14} /> Limpiar Comisiones</button>}
+        </div>
+        <div className="tool-upload-group">
+          <label className="file-drop"><FileSpreadsheet size={18} /> Subir delegados Excel<input type="file" accept=".xlsx" onChange={(e) => upload("delegados", e.target.files?.[0])} /></label>
+          {delegados.length > 0 && <button className="btn danger small-btn" onClick={clearDelegados}><Trash2 size={14} /> Limpiar Delegados</button>}
+        </div>
+      </div>
+      <div className="assignment-panel">
+        <div className="section-heading compact"><span>Asignaciones</span><h2>Paises por comite</h2><p>Para Corte Internacional de Justicia se asigna "Su Excelencia" y apellido, sin pais.</p></div>
+        <div className="inline-form">
+          <label>Comision<select value={comisionId} onChange={(e) => setComisionId(e.target.value)}><option value="">Seleccionar</option>{comisiones.map((c) => <option value={c.id} key={c.id}>{c.nombre}</option>)}</select></label>
+          <label>Modo<select value={modo} onChange={(e) => setModo(e.target.value)}><option value="individual">Individual</option><option value="duplas">Duplas</option></select></label>
+          <button className="btn secondary" type="button" onClick={guardarModoComision} disabled={!comisionId}>Actualizar Modo</button>
+          <label>Buscar pais<input value={paisQuery} onChange={(e) => setPaisQuery(e.target.value)} placeholder="Buscar pais" /></label>
+          <button className="btn primary" type="button" onClick={asignar} disabled={!comisionId}><CheckCircle2 size={15} /> Asignar</button>
+        </div>
+        <form className="country-add" onSubmit={addCountry}><input value={customCountry} onChange={(e) => setCustomCountry(e.target.value)} placeholder="Añadir país o territorio" /><button className="btn secondary" type="submit">Añadir</button></form>
+        <div className="country-picker">{paisesVisibles.map((pais) => <button type="button" key={pais} className={paises.includes(pais) ? "active" : ""} onClick={() => setPaises((x) => x.includes(pais) ? x.filter((p) => p !== pais) : [...x, pais])}>{getFlag(pais, "picker-flag")} <span>{pais}</span></button>)}</div>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>Delegado</th><th>Comision</th><th>Asignacion</th><th>Pase de lista</th>{Object.entries(criterios).map(([k, c]) => <th key={k}>{c.label}<small>0-{c.max}</small></th>)}<th>Total</th><th>Avanza</th></tr></thead>
+          <tbody>
+            {delegados.map((d) => (
+              <tr key={d.id} className={d.asistencia === "ausente" ? "muted-row" : ""}>
+                <td><strong>{d.nombre} {d.apellido}</strong></td>
+                <td>{d.comision || "Sin comision"}</td>
+                <td>
+                  <div className="designacion-cell">
+                    {getFlag(d.designacion)}
+                    <span>{d.designacion || "Pendiente"}</span>
+                  </div>
+                </td>
+                <td><select value={d.asistencia} onChange={(e) => updateAsistencia(d.id, e.target.value)}><option value="presente_votando">Presente/Votando</option><option value="ausente">Ausente</option></select></td>
+                {Object.keys(criterios).map((key) => <td key={key}><input className="score-input" type="number" min="0" max={criterios[key].max} value={d[key]} disabled={d.asistencia === "ausente"} onChange={(e) => updateCalificacion(d.id, key, Number(e.target.value))} /></td>)}
+                <td><strong>{d.asistencia === "ausente" ? "No aplica" : ponderada(d).toFixed(2)}</strong></td>
+                <td><input type="checkbox" checked={d.avanza} onChange={(e) => updateAvanza(d.id, e.target.checked)} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="helper-text">{presentes.length} presentes pasan al apartado de calificacion. Los ausentes quedan fuera del calculo operativo.</p>
+    </section>
+  );
+}
+
+function UsuariosPanel({ distritos, comisiones, admins, setAdmins, onReload, onDeactivate }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState("distrito");
+  const [distritoId, setDistritoId] = useState("");
+  const [comisionId, setComisionId] = useState("");
+
+  async function submit(event) {
+    event.preventDefault();
+    const tempEmail = email;
+    const tempPassword = password;
+    const tempRole = role;
+    const tempDistritoId = distritoId;
+    const tempComisionId = comisionId;
+
+    // Reset inputs immediately
+    setEmail("");
+    setPassword("");
+    setDistritoId("");
+    setComisionId("");
+
+    const tempAdmin = {
+      id: "temp-" + Date.now(),
+      email: tempEmail,
+      role: tempRole,
+      distrito: distritos.find((d) => d.id === Number(tempDistritoId)) || null,
+      comision: comisiones.find((c) => c.id === Number(tempComisionId)) || null,
+      estado: "activo"
+    };
+
+    setAdmins((current) => [tempAdmin, ...current]);
+
+    try {
+      await apiRequest("/api/admins", {
+        method: "POST",
+        body: JSON.stringify({
+          email: tempEmail,
+          password: tempPassword || undefined,
+          role: tempRole,
+          distrito_id: tempDistritoId ? Number(tempDistritoId) : undefined,
+          comision_id: tempComisionId ? Number(tempComisionId) : undefined
+        })
+      });
+      await onReload();
+    } catch (error) {
+      setAdmins((current) => current.filter((a) => a.id !== tempAdmin.id));
+      setEmail(tempEmail);
+      setPassword(tempPassword);
+      setDistritoId(tempDistritoId);
+      setComisionId(tempComisionId);
+      window.alert(error.message);
+    }
+  }
+
+  return (
+    <article className="admin-users-card">
+      <div className="section-heading compact"><span>Usuarios</span><h2>Regional, distritos y mesas</h2></div>
+      <form className="inline-form" onSubmit={submit}>
+        <label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
+        <label>Rol<select value={role} onChange={(e) => setRole(e.target.value)}><option value="regional">Regional</option><option value="distrito">Distrito</option><option value="admin">Mesa directiva</option></select></label>
+        <label>Distrito<select value={distritoId} onChange={(e) => setDistritoId(e.target.value)}><option value="">No aplica</option>{distritos.map((d) => <option value={d.id} key={d.id}>{d.codigo}</option>)}</select></label>
+        <label>Comisión<select value={comisionId} onChange={(e) => setComisionId(e.target.value)}><option value="">No aplica</option>{comisiones.map((c) => <option value={c.id} key={c.id}>{c.nombre}</option>)}</select></label>
+        <label>Contrasena<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} /></label>
+        <button className="btn primary"><UserPlus size={15} /> Crear</button>
+      </form>
+      <div className="admin-list">{admins.map((a) => <div key={a.id}><strong>{a.email}</strong><span>{a.role} | {a.distrito?.codigo || "Regional"} | {a.comision?.nombre || "Todas las comisiones"} | {a.estado}</span><button className="icon-btn danger" onClick={() => onDeactivate(a)} aria-label={`Desactivar ${a.email}`}><Trash2 size={16} /></button></div>)}</div>
+    </article>
+  );
+}
+
+function RegionalReport({ eventos }) {
+  const rows = eventos.map((e) => ({
+    Distrito: e.distrito?.codigo,
+    Evento: e.nombre,
+    Fecha: e.fecha ? new Date(e.fecha).toLocaleDateString("es-DO") : "",
+    Delegados: e._count?.delegados || 0,
+    Comisiones: e._count?.comisiones || 0
+  }));
+  return (
+    <article className="activity-card">
+      <div className="table-title">
+        <div><span>Regional</span><h2>Reporte general CELIDER 10</h2></div>
+        <div className="table-actions"><button className="btn secondary" onClick={() => exportExcel("SIGEL-regional.xlsx", rows)}><Download size={15} /> Excel</button><button className="btn secondary" onClick={() => window.print()}><Download size={15} /> PDF</button></div>
+      </div>
+      <div className="table-wrap"><table><thead><tr><th>Distrito</th><th>Evento</th><th>Fecha</th><th>Delegados</th><th>Comisiones</th></tr></thead><tbody>{rows.map((r, i) => <tr key={i}><td>{r.Distrito}</td><td>{r.Evento}</td><td>{r.Fecha}</td><td>{r.Delegados}</td><td>{r.Comisiones}</td></tr>)}</tbody></table></div>
+    </article>
+  );
+}
+
+function Dashboard({ user, onLogout }) {
+  const [active, setActive] = useState("dashboard");
+  const [eventos, setEventos] = useState([]);
+  const [distritos, setDistritos] = useState([]);
+  const [admins, setAdmins] = useState([]);
+  const [comisiones, setComisiones] = useState([]);
+  const [audits, setAudits] = useState([]);
+  const [eventoActivo, setEventoActivo] = useState(null);
+  const [align, setAlign] = useState(() => localStorage.getItem("sigel-align") || "left");
+
+  useEffect(() => { document.documentElement.dataset.theme = "light"; localStorage.removeItem("sigel-theme"); }, []);
+  useEffect(() => { document.documentElement.dataset.align = align; localStorage.setItem("sigel-align", align); }, [align]);
+
+  async function loadAudits() {
+    try {
+      const data = await apiRequest("/api/audit");
+      setAudits(data);
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  async function load() {
+    const [eventRows, districtRows] = await Promise.all([apiRequest("/api/eventos"), apiRequest("/api/eventos/distritos")]);
+    setEventos(eventRows);
+    setDistritos(districtRows);
+    if (user.role === "superadmin") {
+      const [adminRows, commissionRows, auditRows] = await Promise.all([
+        apiRequest("/api/admins"),
+        apiRequest("/api/admins/comisiones"),
+        apiRequest("/api/audit").catch(() => [])
+      ]);
+      setAdmins(adminRows);
+      setComisiones(commissionRows);
+      setAudits(auditRows);
+    }
+  }
+
+  async function deactivateAdmin(admin) {
+    if (!window.confirm(`Desactivar el usuario ${admin.email}?`)) return;
+    const previous = [...admins];
+    setAdmins((current) => current.filter((a) => a.id !== admin.id));
+    try {
+      await apiRequest(`/api/admins/${admin.id}`, { method: "DELETE" });
+      await load();
+    } catch (error) {
+      setAdmins(previous);
+      window.alert(error.message);
+    }
+  }
+
+  useEffect(() => {
+    let active = true;
+    const refresh = () => load().catch(console.error);
+    refresh();
+    const timer = window.setInterval(() => { if (active && !eventoActivo) refresh(); }, 5000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [eventoActivo]);
+
+  useEffect(() => {
+    if (active === "seguridad" && user.role === "superadmin") {
+      loadAudits().catch(console.error);
+    }
+  }, [active, user.role]);
+
+  const totalDelegados = eventos.reduce((sum, e) => sum + (e._count?.delegados || 0), 0);
+  const totalComisiones = eventos.reduce((sum, e) => sum + (e._count?.comisiones || 0), 0);
+  const isRegional = ["superadmin", "regional"].includes(user.role);
+
+  return (
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="brand" onClick={onLogout} style={{ cursor: "pointer" }} title="Cerrar sesión y volver al inicio">
+          <LogoMark />
+          <div><strong>SIGEL CELIDER 10</strong><span>{user.email}</span></div>
+        </div>
+        <nav className="nav-actions">
+          <button className={active === "dashboard" ? "active" : ""} onClick={() => setActive("dashboard")}>Dashboard</button>
+          <button className={active === "eventos" ? "active" : ""} onClick={() => setActive("eventos")}>Eventos</button>
+          {isRegional && <button className={active === "regional" ? "active" : ""} onClick={() => setActive("regional")}>Regional</button>}
+          {user.role === "superadmin" && <button className={active === "usuarios" ? "active" : ""} onClick={() => setActive("usuarios")}>Usuarios</button>}
+          {user.role === "superadmin" && <button className={active === "seguridad" ? "active" : ""} onClick={() => setActive("seguridad")}>Seguridad</button>}
+        </nav>
+        <div className="header-actions"><button className="icon-btn" onClick={() => setAlign((value) => value === "left" ? "right" : "left")} aria-label="Cambiar alineación">{align === "left" ? <AlignRight size={16} /> : <AlignLeft size={16} />}</button><span className="role-pill">{user.role}</span><button className="icon-btn" onClick={onLogout} aria-label="Cerrar sesión"><LogOut size={17} /></button></div>
+      </header>
+      <main className="workspace">
+        <section className="admin-hero"><div><span>Panel seguro</span><h1>Operacion CELIDER Regional 10</h1><p>Eventos por distrito, pase de lista, calificaciones, asignaciones y reportes exportables.</p></div></section>
+        {active === "dashboard" && <section className="metrics-grid"><Metric icon={BarChart3} label="Eventos" value={eventos.length} note="Registrados" /><Metric icon={Users} label="Delegados" value={totalDelegados} note="Cargados" /><Metric icon={FileSpreadsheet} label="Comisiones" value={totalComisiones} note="Configuradas" /><Metric icon={ShieldCheck} label="Seguridad" value="Activa" note="Acceso por roles" /></section>}
+        {active === "eventos" && (eventoActivo ? <EventoDetalle evento={eventoActivo} onBack={() => { setEventoActivo(null); load(); }} /> : <EventosPanel user={user} eventos={eventos} setEventos={setEventos} distritos={distritos} onReload={load} setEventoActivo={setEventoActivo} />)}
+        {active === "regional" && <RegionalReport eventos={eventos} />}
+        {active === "usuarios" && <UsuariosPanel distritos={distritos} comisiones={comisiones} admins={admins} setAdmins={setAdmins} onReload={load} onDeactivate={deactivateAdmin} />}
+        {active === "seguridad" && user.role === "superadmin" && <SeguridadPanel audits={audits} onRefresh={loadAudits} />}
+      </main>
+    </div>
+  );
+}
+
+function SeguridadPanel({ audits, onRefresh }) {
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const filteredAudits = audits.filter((a) => {
+    const email = a.user?.email || "sistema";
+    const text = `${a.action} ${email} ${a.entityType}`.toLowerCase();
+    return text.includes(searchTerm.toLowerCase());
+  });
+
+  return (
+    <article className="activity-card security-card">
+      <div className="table-title">
+        <div>
+          <span>Ciberseguridad y Monitoreo</span>
+          <h2>Bitácora de Auditoría y Detección de Incidentes</h2>
+        </div>
+        <div className="table-actions">
+          <input
+            type="text"
+            className="score-input search-logs"
+            placeholder="Buscar acción o usuario..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{ width: "240px" }}
+          />
+          <button className="btn secondary" onClick={onRefresh}>Actualizar logs</button>
+        </div>
+      </div>
+
+      <div className="security-alert-banner">
+        <ShieldCheck size={18} />
+        <div>
+          <strong>Protección en Tiempo Real Activa:</strong> El sistema audita todos los accesos, inyecciones de código e intentos de intrusión. Las fórmulas de Excel y las inyecciones SQL son interceptadas y registradas para resguardar la seguridad de la Regional 10.
+        </div>
+      </div>
+
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha y Hora</th>
+              <th>Usuario</th>
+              <th>Rol</th>
+              <th>Acción Realizada</th>
+              <th>Entidad</th>
+              <th>ID</th>
+              <th>Detalles / Metadatos</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredAudits.map((a) => {
+              const date = new Date(a.createdAt).toLocaleString("es-DO");
+              const isAlert = ["fallido", "incorrecta", "inexistente", "desactivado", "eliminado", "bloqueada", "inyeccion", "incidente", "limpiados", "limpiadas"].some(keyword => a.action.toLowerCase().includes(keyword));
+              
+              return (
+                <tr key={a.id} className={isAlert ? "alert-row" : ""}>
+                  <td style={{ whiteSpace: "nowrap" }}>{date}</td>
+                  <td><strong>{a.user?.email || "Público / Sistema"}</strong></td>
+                  <td><span className="role-pill small">{a.user?.role || "N/A"}</span></td>
+                  <td>
+                    <span className={`action-badge ${isAlert ? "alert-action" : "success-action"}`}>
+                      {a.action}
+                    </span>
+                  </td>
+                  <td><code>{a.entityType}</code></td>
+                  <td>{a.entityId || "N/A"}</td>
+                  <td>
+                    <span className="details-text">
+                      {a.changes ? JSON.stringify(a.changes) : "Sin cambios reportados"}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  );
+}
+
+function App() {
+  const [page, setPage] = useState("home");
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    async function restore() {
       try {
         const refreshed = await apiRequest("/api/auth/refresh", { method: "POST" });
         setAccessToken(refreshed.access_token);
         const me = await apiRequest("/api/auth/me");
         setUser(me.user);
-        await loadAdminState(me.user);
       } catch {
         setAccessToken(null);
       }
     }
-    restoreSession();
+    restore();
   }, []);
 
-  function handleAudit(tipo, detalle, usuario = user?.email || user?.name || "Superadmin") {
-    setAuditLog((actuales) => [crearMovimiento(tipo, detalle, usuario), ...actuales]);
-  }
-
-  function handleSetActive(section) {
-    if (user?.role === "admin" && ["importar", "usuarios", "auditoria"].includes(section)) return;
-    setActive(section);
-    handleAudit("Navegación", `Ingresó a la sección ${section}.`);
-  }
-
-  async function handleLogin(nextUser) {
-    setUser(nextUser);
-    setPage("home");
-    await loadAdminState(nextUser);
-    setAuditLog((actuales) => [crearMovimiento("Inicio de sesión", `${nextUser.email} entró al panel administrativo.`, nextUser.email), ...actuales]);
-  }
-
-  async function handleLogout() {
-    handleAudit("Cierre de sesión", `${user?.email || user?.name || "Usuario"} salió del panel.`);
+  async function logout() {
     await apiRequest("/api/auth/logout", { method: "POST" }).catch(() => {});
     setAccessToken(null);
     setUser(null);
     setPage("home");
-    setActive("dashboard");
-    loadPublicState().catch(() => {});
   }
 
-  if (user) {
-    return (
-      <Dashboard
-        user={user}
-        rows={rows}
-        setRows={setRows}
-        published={published}
-        setPublished={setPublished}
-        active={active}
-        setActive={handleSetActive}
-        onLogout={handleLogout}
-        auditLog={auditLog}
-        onAudit={handleAudit}
-        admins={admins}
-        setAdmins={setAdmins}
-        onReload={() => loadAdminState(user)}
-      />
-    );
-  }
-
-  if (page === "login") {
-    return <LoginPage onLogin={handleLogin} onBack={() => setPage("home")} />;
-  }
-
-  return <HomePage rows={rows} published={published} onNavigate={setPage} />;
+  if (user) return <Dashboard user={user} onLogout={logout} />;
+  if (page === "login") return <LoginPage onLogin={setUser} onBackToHome={() => setPage("home")} />;
+  return <PrivateHome goLogin={() => setPage("login")} />;
 }
 
 createRoot(document.getElementById("root")).render(<App />);
-

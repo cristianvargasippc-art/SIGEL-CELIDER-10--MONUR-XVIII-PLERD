@@ -9,12 +9,46 @@ datasource db {
 
 model Comision {
   id        Int        @id @default(autoincrement())
-  nombre    String     @unique @db.VarChar(255)
+  nombre    String     @db.VarChar(255)
+  eventoId  Int?       @map("evento_id")
   createdAt DateTime   @default(now()) @map("created_at")
+  evento    Evento?    @relation(fields: [eventoId], references: [id], onDelete: Cascade)
   users     User[]
   delegados Delegado[]
+  modoAsignacion ModoAsignacion @default(individual) @map("modo_asignacion")
 
+  @@unique([nombre, eventoId])
+  @@index([eventoId])
   @@map("comisiones")
+}
+
+model Distrito {
+  id        Int      @id @default(autoincrement())
+  codigo    String   @unique @db.VarChar(10)
+  nombre    String   @db.VarChar(120)
+  createdAt DateTime @default(now()) @map("created_at")
+  users     User[]
+  eventos   Evento[]
+
+  @@map("distritos")
+}
+
+model Evento {
+  id          Int          @id @default(autoincrement())
+  nombre      String       @db.VarChar(180)
+  fecha       DateTime?
+  distritoId  Int          @map("distrito_id")
+  estado      EstadoEvento @default(borrador)
+  createdById Int?         @map("created_by_id")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  distrito    Distrito     @relation(fields: [distritoId], references: [id])
+  createdBy   User?        @relation("EventosCreados", fields: [createdById], references: [id])
+  comisiones  Comision[]
+  delegados   Delegado[]
+
+  @@index([distritoId])
+  @@map("eventos")
 }
 
 model User {
@@ -23,28 +57,39 @@ model User {
   passwordHash String     @map("password_hash") @db.VarChar(255)
   role         Role
   comisionId   Int?       @map("comision_id")
+  distritoId   Int?       @map("distrito_id")
   ultimoLogin  DateTime?  @map("ultimo_login")
   estado       EstadoUser @default(activo)
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
   deletedAt    DateTime?  @map("deleted_at")
   comision     Comision?  @relation(fields: [comisionId], references: [id])
+  distrito     Distrito?  @relation(fields: [distritoId], references: [id])
   audits       Audit[]
+  eventosCreados Evento[] @relation("EventosCreados")
 
   @@index([email])
   @@index([role])
+  @@index([distritoId])
   @@map("users")
 }
 
 model Delegado {
   id           Int           @id @default(autoincrement())
   nombre       String        @db.VarChar(255)
-  designacion  String        @db.VarChar(255)
-  comisionId   Int           @map("comision_id")
+  designacion  String?       @db.VarChar(255)
+  apellido     String?       @db.VarChar(120)
+  eventoId     Int?          @map("evento_id")
+  comisionId   Int?          @map("comision_id")
+  asistencia   PresenteEstado @default(presente_votando)
+  avanzaEtapa  Boolean       @default(false) @map("avanza_etapa")
+  asignacionGrupo String?    @map("asignacion_grupo") @db.VarChar(80)
   createdAt    DateTime      @default(now()) @map("created_at")
-  comision     Comision      @relation(fields: [comisionId], references: [id])
+  evento       Evento?       @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  comision     Comision?     @relation(fields: [comisionId], references: [id])
   calificacion Calificacion?
 
+  @@index([eventoId])
   @@index([comisionId])
   @@index([nombre])
   @@map("delegados")
@@ -98,6 +143,8 @@ model Config {
 
 enum Role {
   superadmin
+  regional
+  distrito
   admin
 
   @@map("role")
@@ -112,7 +159,22 @@ enum EstadoUser {
 
 enum PresenteEstado {
   presente_votando
-  presente_ausente
+  ausente
 
   @@map("presente_estado")
+}
+
+enum EstadoEvento {
+  borrador
+  activo
+  cerrado
+
+  @@map("estado_evento")
+}
+
+enum ModoAsignacion {
+  individual
+  duplas
+
+  @@map("modo_asignacion")
 }

@@ -9,15 +9,23 @@ import { calificacionesLimiter } from "../middleware/rateLimit.js";
 export const calificacionesRouter = Router();
 
 async function assertCanGrade(user, delegadoId) {
-  const delegado = await prisma.delegado.findUnique({ where: { id: delegadoId } });
+  const delegado = await prisma.delegado.findUnique({ where: { id: delegadoId }, include: { evento: true } });
   if (!delegado) return { error: [404, "Delegado no existe"] };
-  if (user.role === "admin" && delegado.comisionId !== user.comision_id) {
-    return { error: [403, "Delegado fuera de su comision"] };
+  if (["distrito", "admin"].includes(user.role) && delegado.evento?.distritoId !== user.distrito_id) {
+    return { error: [403, "Delegado fuera de tu distrito"] };
+  }
+  if (user.role === "admin" && user.comision_id && delegado.comisionId !== user.comision_id) {
+    return { error: [403, "Delegado fuera de tu comision"] };
+  }
+  const onlyAttendance = Object.keys(user.payload || {}).every((key) => key === "presente_estado" || key === "delegado_id");
+  if (!onlyAttendance && delegado.asistencia === "ausente") {
+    return { error: [400, "El delegado ausente no puede ser calificado"] };
   }
   return { delegado };
 }
 
 async function saveCalificacion(req, res, delegadoId, payload) {
+  req.user.payload = payload;
   const permission = await assertCanGrade(req.user, delegadoId);
   if (permission.error) return res.status(permission.error[0]).json({ error: permission.error[1] });
 

@@ -11,6 +11,7 @@ import { authRouter } from "./routes/auth.js";
 import { calificacionesRouter } from "./routes/calificaciones.js";
 import { configRouter } from "./routes/config.js";
 import { delegadosRouter } from "./routes/delegados.js";
+import { eventosRouter } from "./routes/eventos.js";
 import { exportRouter } from "./routes/export.js";
 import { rankingRouter } from "./routes/ranking.js";
 import { prisma } from "./db.js";
@@ -36,8 +37,34 @@ function wrapAsyncRoutes(router) {
   return router;
 }
 
-app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors({ origin: process.env.APP_URL || "http://localhost:5173", credentials: true }));
+const allowedOrigins = (process.env.APP_URL || "http://localhost:5173")
+  .split(",")
+  .map((origin) => origin.trim().replace(/\/$/, ""))
+  .filter(Boolean);
+
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      imgSrc: ["'self'", "data:", "https://flagcdn.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      connectSrc: ["'self'", ...allowedOrigins, "http://localhost:3000", "http://localhost:5173"]
+    }
+  }
+}));
+
+app.use(cors({
+  origin(origin, callback) {
+    const cleanOrigin = origin ? origin.trim().replace(/\/$/, "") : null;
+    if (!cleanOrigin || allowedOrigins.includes(cleanOrigin) || cleanOrigin.startsWith("http://localhost:")) {
+      return callback(null, true);
+    }
+    return callback(null, false);
+  },
+  credentials: true
+}));
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 
@@ -50,13 +77,13 @@ app.get("/api/health/db", async (_req, res) => {
     logger.error("Database health check failed", { error: error.message, code: error.code });
     return res.status(500).json({
       error: "No se pudo conectar con la base de datos",
-      detail: error.message,
-      code: error.code || null
+      ...(process.env.NODE_ENV !== "production" ? { detail: error.message, code: error.code || null } : {})
     });
   }
 });
 app.use("/api/auth", wrapAsyncRoutes(authRouter));
 app.use("/api/delegados", wrapAsyncRoutes(delegadosRouter));
+app.use("/api/eventos", wrapAsyncRoutes(eventosRouter));
 app.use("/api/calificaciones", wrapAsyncRoutes(calificacionesRouter));
 app.use("/api/ranking", wrapAsyncRoutes(rankingRouter));
 app.use("/api/audit", wrapAsyncRoutes(auditRouter));
@@ -75,8 +102,7 @@ app.use((err, _req, res, _next) => {
   logger.error("Unhandled error", { error: err.message, stack: err.stack });
   return res.status(500).json({
     error: "Error interno del servidor",
-    detail: err.message,
-    code: err.code || null
+    ...(process.env.NODE_ENV !== "production" ? { detail: err.message, code: err.code || null } : {})
   });
 });
 
@@ -87,6 +113,10 @@ function startServer(currentPort) {
 
   server.on("error", (error) => {
     if (error.code === "EADDRINUSE") {
+      if (process.env.NODE_ENV === "production") {
+        logger.error("El puerto configurado ya esta en uso", { port: currentPort });
+        process.exit(1);
+      }
       const fallbackPort = currentPort + 1;
       logger.warn(`Puerto ${currentPort} en uso, intentando con ${fallbackPort}`);
       startServer(fallbackPort);

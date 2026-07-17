@@ -6,16 +6,21 @@ import { verifyToken } from "../middleware/auth.js";
 export const exportRouter = Router();
 
 exportRouter.get("/excel", verifyToken, async (req, res) => {
-  const where = req.user.role === "admin" ? { comisionId: req.user.comision_id } : {};
+  const where = (req.user.role === "distrito" || req.user.role === "admin")
+    ? { evento: { distritoId: req.user.distrito_id } }
+    : {};
   const rows = await prisma.delegado.findMany({
     where,
-    include: { comision: true, calificacion: true },
+    include: { evento: { include: { distrito: true } }, comision: true, calificacion: true },
     orderBy: { nombre: "asc" }
   });
   const data = rows.map((row) => ({
+    Distrito: row.evento?.distrito?.codigo || "",
+    Evento: row.evento?.nombre || "",
     Nombre: row.nombre,
-    Delegacion: row.designacion,
-    Comision: row.comision.nombre,
+    Delegacion: row.designacion || "",
+    Comision: row.comision?.nombre || "",
+    Asistencia: row.asistencia,
     Oratoria: row.calificacion?.oratoria,
     Argumentacion: row.calificacion?.argumentacion,
     Negociacion: row.calificacion?.negociacion,
@@ -23,7 +28,7 @@ exportRouter.get("/excel", verifyToken, async (req, res) => {
     Redaccion: row.calificacion?.redaccion,
     Ponderada: row.calificacion?.ponderada,
     Mencion: row.calificacion?.mencion,
-    "Avanza / Reconocimiento": row.calificacion?.pasaMinumeXvii ? "Si" : "No",
+    "Avanza / Reconocimiento": row.avanzaEtapa || row.calificacion?.pasaMinumeXvii ? "Si" : "No",
     Feedback: row.calificacion?.feedback
   }));
   const sheet = XLSX.utils.json_to_sheet(data);

@@ -14,11 +14,30 @@ authRouter.post("/login", loginLimiter, validate(loginSchema), async (req, res) 
   const user = await prisma.user.findUnique({ where: { email } });
 
   if (!user || user.estado !== "activo" || user.deletedAt) {
+    await prisma.audit.create({
+      data: {
+        userId: null,
+        action: "login_fallido_usuario_inexistente",
+        entityType: "user",
+        changes: { email }
+      }
+    });
     return res.status(401).json({ error: "Credenciales invalidas" });
   }
 
   const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) return res.status(401).json({ error: "Credenciales invalidas" });
+  if (!valid) {
+    await prisma.audit.create({
+      data: {
+        userId: user.id,
+        action: "login_fallido_contrasena_incorrecta",
+        entityType: "user",
+        entityId: user.id,
+        changes: { email: user.email }
+      }
+    });
+    return res.status(401).json({ error: "Credenciales invalidas" });
+  }
 
   await prisma.user.update({ where: { id: user.id }, data: { ultimoLogin: new Date() } });
   await prisma.audit.create({
@@ -31,7 +50,7 @@ authRouter.post("/login", loginLimiter, validate(loginSchema), async (req, res) 
     }
   });
 
-  const payload = { id: user.id, email: user.email, role: user.role, comision_id: user.comisionId };
+  const payload = { id: user.id, email: user.email, role: user.role, distrito_id: user.distritoId, comision_id: user.comisionId };
   const accessToken = jwt.sign(payload, process.env.JWT_SECRET, {
     expiresIn: Number(process.env.JWT_EXPIRATION || 3600)
   });
@@ -66,7 +85,7 @@ authRouter.post("/refresh", async (req, res) => {
       return res.status(401).json({ error: "Sesion invalida" });
     }
     const accessToken = jwt.sign(
-      { id: dbUser.id, email: dbUser.email, role: dbUser.role, comision_id: dbUser.comisionId },
+      { id: dbUser.id, email: dbUser.email, role: dbUser.role, distrito_id: dbUser.distritoId, comision_id: dbUser.comisionId },
       process.env.JWT_SECRET,
       { expiresIn: Number(process.env.JWT_EXPIRATION || 3600) }
     );
@@ -79,7 +98,7 @@ authRouter.post("/refresh", async (req, res) => {
 authRouter.get("/me", verifyToken, async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user.id },
-    include: { comision: true }
+    include: { comision: true, distrito: true }
   });
 
   if (!user || user.estado !== "activo" || user.deletedAt) {
@@ -91,6 +110,8 @@ authRouter.get("/me", verifyToken, async (req, res) => {
       id: user.id,
       email: user.email,
       role: user.role,
+      distrito_id: user.distritoId,
+      distrito: user.distrito?.codigo || null,
       comision_id: user.comisionId,
       comision: user.comision?.nombre || null,
       ultimo_login: user.ultimoLogin

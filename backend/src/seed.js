@@ -3,14 +3,20 @@ import bcrypt from "bcryptjs";
 import { prisma } from "./db.js";
 
 const comisiones = ["Asamblea General", "Consejo de Seguridad", "Derechos Humanos"];
+const distritos = ["10-01", "10-02", "10-03", "10-04", "10-05", "10-06", "10-07"];
 
 async function main() {
-  for (const nombre of comisiones) {
-    await prisma.comision.upsert({
-      where: { nombre },
+  for (const codigo of distritos) {
+    await prisma.distrito.upsert({
+      where: { codigo },
       update: {},
-      create: { nombre }
+      create: { codigo, nombre: `Distrito ${codigo}` }
     });
+  }
+
+  for (const nombre of comisiones) {
+    const exists = await prisma.comision.findFirst({ where: { nombre, eventoId: null } });
+    if (!exists) await prisma.comision.create({ data: { nombre } });
   }
 
   const email = process.env.SUPERADMIN_EMAIL || "superadmin@celider10.edu.do";
