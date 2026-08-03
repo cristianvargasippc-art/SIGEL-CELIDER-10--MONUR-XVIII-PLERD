@@ -74,11 +74,11 @@ p {
   place-items: center;
   width: 105px;
   aspect-ratio: 1;
-  border-radius: 18px;
+  border-radius: 50%;
   overflow: hidden;
-  background: #ffffff;
-  border: 3px solid #ffffff;
-  outline: 2px solid rgba(28, 143, 120, 0.45);
+  background: transparent;
+  border: none;
+  outline: none;
   box-shadow: 0 10px 26px rgba(4, 34, 64, 0.18);
   transition: transform 0.2s ease;
 }
@@ -89,30 +89,30 @@ p {
 
 .logo-mark.sm {
   width: 68px;
-  border-radius: 12px;
-  border-width: 2px;
-  outline-width: 1.5px;
+  border-radius: 50%;
+  border: none;
+  outline: none;
   box-shadow: 0 6px 16px rgba(4, 34, 64, 0.12);
 }
 
 .logo-mark.md {
   width: 125px;
-  border-radius: 22px;
+  border-radius: 50%;
 }
 
 .logo-mark img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 15px;
+  border-radius: 50%;
 }
 
 .logo-mark.sm img {
-  border-radius: 10px;
+  border-radius: 50%;
 }
 
 .logo-mark.md img {
-  border-radius: 19px;
+  border-radius: 50%;
 }
 
 .brand {
