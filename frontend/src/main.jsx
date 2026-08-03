@@ -875,7 +875,7 @@ function UsuariosPanel({ user, distritos, comisiones, admins, setAdmins, onReloa
   return (
     <article className="admin-users-card">
       <div className="section-heading compact"><span>Usuarios</span><h2>Regional, distritos y mesas</h2></div>
-      <form className="inline-form" onSubmit={submit}>
+      <form className="users-form" onSubmit={submit}>
         <label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
         <label>Rol<select value={role} onChange={(e) => setRole(e.target.value)}><option value="admin">Mesa directiva</option>{user.role === "superadmin" && <option value="regional">Regional</option>}{user.role === "superadmin" && <option value="distrito">Distrito</option>}</select></label>
         <label>Distrito<select value={user.role === "distrito" ? user.distrito_id || "" : distritoId} onChange={(e) => setDistritoId(e.target.value)} disabled={user.role === "distrito"}><option value="">No aplica</option>{distritos.map((d) => <option value={d.id} key={d.id}>{d.codigo}</option>)}</select></label>
@@ -883,7 +883,19 @@ function UsuariosPanel({ user, distritos, comisiones, admins, setAdmins, onReloa
         <label>Contraseña<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} /></label>
         <button className="btn primary"><UserPlus size={15} /> Crear</button>
       </form>
-      <div className="admin-list">{admins.map((a) => <div key={a.id}><strong>{a.email}</strong><span>{a.role} | {a.distrito?.codigo || "Regional"} | {a.comision?.nombre || "Todas las comisiones"} | {a.estado}</span><button className="icon-btn danger" onClick={() => onDeactivate(a)} aria-label={`Desactivar ${a.email}`}><Trash2 size={16} /></button></div>)}</div>
+      <div className="admin-list">
+        {admins.map((a) => (
+          <div key={a.id} className="row-actions">
+            <div className="link-row">
+              <strong>{a.email}</strong>
+              <span>{a.role} | {a.distrito?.codigo || "Regional"} | {a.comision?.nombre || "Todas las comisiones"} | {a.estado}</span>
+            </div>
+            <button className="icon-btn danger" onClick={() => onDeactivate(a)} aria-label={`Desactivar ${a.email}`}>
+              <Trash2 size={16} />
+            </button>
+          </div>
+        ))}
+      </div>
     </article>
   );
 }

@@ -303,6 +303,7 @@ label {
   width: min(1480px, 100%);
   margin: 0 auto;
   padding: 22px;
+  align-content: start;
 }
 
 .admin-layout {
@@ -1215,6 +1216,7 @@ html[data-theme="light"] .home-logo-lock strong {
   background: #fff;
   border: 1px solid #c4e2ef;
   box-shadow: var(--shadow);
+  align-content: start;
 }
 
 .inline-form {
@@ -1224,14 +1226,40 @@ html[data-theme="light"] .home-logo-lock strong {
   gap: 10px;
 }
 
+.users-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .users-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .users-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+.inline-form button.btn,
+.users-form button.btn {
+  height: 44px;
+  min-height: 44px;
+}
+
 .admin-list,
 .audit-list {
   display: grid;
   gap: 10px;
+  align-content: start;
 }
 
-.admin-list div,
-.audit-list div {
+.admin-list > div,
+.audit-list > div {
   display: grid;
   gap: 4px;
   padding: 12px;
