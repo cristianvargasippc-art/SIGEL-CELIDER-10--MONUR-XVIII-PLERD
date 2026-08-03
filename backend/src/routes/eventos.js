@@ -434,7 +434,7 @@ eventosRouter.post("/:eventoId/asignar", verifyToken, authorize("superadmin", "d
         { comisionId: null }
       ]
     },
-    orderBy: { nombre: "asc" }
+    orderBy: { id: "asc" }
   });
   const sinAsignar = allDelegados.filter((d) => !d.designacion || d.designacion.trim() === "");
   const toAssign = cantidad ? sinAsignar.slice(0, cantidad) : sinAsignar;
@@ -446,17 +446,39 @@ eventosRouter.post("/:eventoId/asignar", verifyToken, authorize("superadmin", "d
     return res.status(400).json({ error: "Todos los delegados de esta comisión ya tienen país asignado." });
   }
 
+  // Validar cantidad de países requeridos para la asignación
+  const requiredCountries = esCorte ? 0 : (modo === "duplas" ? Math.ceil(toAssign.length / 2) : toAssign.length);
+  if (!esCorte && paises.length < requiredCountries) {
+    return res.status(400).json({ error: `Se requieren al menos ${requiredCountries} países para asignar ${toAssign.length} delegados en modo ${modo}.` });
+  }
+
+  // Obtener el número de grupo máximo ya asignado en esta comisión para el modo actual para evitar colisiones
+  const comisionDelegados = allDelegados.filter((d) => d.comisionId === comisionId);
+  let maxGrupo = 0;
+  for (const d of comisionDelegados) {
+    if (d.asignacionGrupo && d.asignacionGrupo.startsWith(`${modo}-`)) {
+      const parts = d.asignacionGrupo.split("-");
+      if (parts.length === 2) {
+        const num = parseInt(parts[1], 10);
+        if (!isNaN(num) && num > maxGrupo) {
+          maxGrupo = num;
+        }
+      }
+    }
+  }
+
   const shuffled = [...paises].sort(() => Math.random() - 0.5);
   const updates = [];
   for (let index = 0; index < toAssign.length; index += 1) {
-    const grupo = modo === "duplas" ? Math.floor(index / 2) : index;
+    const batchGrupo = modo === "duplas" ? Math.floor(index / 2) : index;
+    const grupo = maxGrupo + batchGrupo;
     let primerApellido = "";
     if (toAssign[index].apellido) {
       primerApellido = toAssign[index].apellido.trim().split(/\s+/)[0];
     } else {
       primerApellido = toAssign[index].nombre.trim().split(/\s+/)[0];
     }
-    const designacion = esCorte ? `Su Excelencia ${primerApellido}` : shuffled[grupo % shuffled.length];
+    const designacion = esCorte ? `Su Excelencia ${primerApellido}` : shuffled[batchGrupo % shuffled.length];
     updates.push(prisma.delegado.update({
       where: { id: toAssign[index].id },
       data: { comisionId, designacion, asignacionGrupo: `${modo}-${grupo + 1}` }

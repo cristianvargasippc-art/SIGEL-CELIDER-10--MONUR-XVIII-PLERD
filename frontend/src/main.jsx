@@ -264,15 +264,18 @@ function EventosPanel({ user, eventos, setEventos, distritos, onReload, setEvent
           </form>
         )}
         <div className="admin-list">
-          {eventos.map((evento) => (
-            <div key={evento.id} className="row-actions">
-              <button className="link-row" onClick={() => setEventoActivo(evento)}>
-                <strong>{evento.nombre}</strong>
-                <span>{evento.distrito?.codigo} | {evento.fecha ? new Date(evento.fecha).toLocaleDateString("es-DO") : "Sin fecha"} | {evento._count?.delegados || 0} delegados | {evento._count?.comisiones || 0} comisiones</span>
-              </button>
-              {canCreate && <button className="icon-btn danger" onClick={() => deleteEvento(evento.id)} aria-label="Eliminar evento"><Trash2 size={16} /></button>}
-            </div>
-          ))}
+          {eventos.map((evento) => {
+            const isTemp = String(evento.id).startsWith("temp-");
+            return (
+              <div key={evento.id} className="row-actions" style={isTemp ? { opacity: 0.6, pointerEvents: "none" } : undefined}>
+                <button className="link-row" onClick={() => setEventoActivo(evento)} disabled={isTemp}>
+                  <strong>{evento.nombre}</strong>
+                  <span>{evento.distrito?.codigo} | {evento.fecha ? new Date(evento.fecha).toLocaleDateString("es-DO") : "Sin fecha"} | {evento._count?.delegados || 0} delegados | {evento._count?.comisiones || 0} comisiones</span>
+                </button>
+                {canCreate && <button className="icon-btn danger" onClick={() => deleteEvento(evento.id)} disabled={isTemp} aria-label="Eliminar evento"><Trash2 size={16} /></button>}
+              </div>
+            );
+          })}
         </div>
       </article>
       <article className="activity-card">
@@ -360,7 +363,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
       const aAssigned = a.designacion ? 0 : 1;
       const bAssigned = b.designacion ? 0 : 1;
       if (aAssigned !== bAssigned) return aAssigned - bAssigned;
-      return a.nombre.localeCompare(b.nombre);
+      return Number(a.id) - Number(b.id);
     });
   }, [delegados]);
 
