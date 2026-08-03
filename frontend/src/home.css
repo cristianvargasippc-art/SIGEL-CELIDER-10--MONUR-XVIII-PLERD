@@ -433,8 +433,12 @@
 .login-brand .logo-mark {
   width: 56px;
   aspect-ratio: 1;
-  border-radius: 50%;
+  border-radius: 10px;
   border: 2px solid var(--line);
+}
+
+.login-brand .logo-mark img {
+  border-radius: 8px;
 }
 
 .login-brand > div > span {
