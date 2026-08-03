@@ -33,7 +33,9 @@ adminsRouter.get("/", verifyToken, authorize("superadmin", "distrito"), async (r
 
 adminsRouter.post("/", verifyToken, authorize("superadmin", "distrito"), validate(adminSchema), async (req, res) => {
   const existing = await prisma.user.findUnique({ where: { email: req.body.email } });
-  if (existing && !existing.deletedAt) return res.status(409).json({ error: "Ya existe un usuario con ese correo" });
+  if (existing && !existing.deletedAt && existing.estado === "activo") {
+    return res.status(409).json({ error: "Ya existe un usuario activo con ese correo" });
+  }
   const password = req.body.password || Math.random().toString(36).slice(2, 12) + "A1";
   const hash = await bcrypt.hash(password, Number(process.env.BCRYPT_ROUNDS || 10));
   const role = req.user.role === "distrito" ? "admin" : req.body.role || "distrito";
@@ -55,28 +57,46 @@ adminsRouter.post("/", verifyToken, authorize("superadmin", "distrito"), validat
     if (role === "admin") distritoId = comision.evento.distritoId;
   }
 
-  const admin = await prisma.user.create({
-    data: {
-      email: req.body.email,
-      passwordHash: hash,
-      role,
-      distritoId,
-      comisionId,
-      deletedAt: null,
-      estado: "activo"
-    }
-  });
+  let admin;
+  if (existing) {
+    admin = await prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        passwordHash: hash,
+        role,
+        distritoId,
+        comisionId,
+        deletedAt: null,
+        estado: "activo"
+      }
+    });
+  } else {
+    admin = await prisma.user.create({
+      data: {
+        email: req.body.email,
+        passwordHash: hash,
+        role,
+        distritoId,
+        comisionId,
+        deletedAt: null,
+        estado: "activo"
+      }
+    });
+  }
+
   await prisma.audit.create({
     data: {
       userId: req.user.id,
-      action: "admin_creado",
+      action: existing ? "admin_reactivado" : "admin_creado",
       entityType: "user",
       entityId: admin.id,
       changes: { email: admin.email, role, distrito_id: admin.distritoId, comision_id: admin.comisionId, password_definida: Boolean(req.body.password) }
     }
   });
-  return res.status(201).json({ id: admin.id, email: admin.email, password_temp: password });
+  return res.status(existing ? 200 : 201).json({ id: admin.id, email: admin.email, password_temp: password });
 });
+
+
 
 adminsRouter.delete("/:adminId", verifyToken, authorize("superadmin", "distrito"), async (req, res) => {
   if (Number(req.params.adminId) === req.user.id) return res.status(400).json({ error: "No puedes desactivar tu propio usuario" });

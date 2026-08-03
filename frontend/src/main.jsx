@@ -1005,10 +1005,23 @@ function Dashboard({ user, onLogout }) {
         </div>
       </aside>
       <main className="workspace">
-        <section className="admin-hero lighthouse-hero">
-          <div><span>Bienvenido</span><h1>Bienvenido al panel institucional CELIDER Regional 10</h1><p>Gestiona eventos, carga listados, asigna países, verifica asistencia y consulta auditoría desde un entorno protegido por roles.</p></div>
-        </section>
-        {active === "inicio" && <section className="metrics-grid"><Metric icon={BarChart3} label="Eventos" value={eventos.length} note="Registrados" /><Metric icon={Users} label="Delegados" value={totalDelegados} note="Cargados" /><Metric icon={FileSpreadsheet} label="Comisiones" value={totalComisiones} note="Configuradas" /><Metric icon={ShieldCheck} label="Seguridad" value="Activa" note="Acceso por roles" /></section>}
+        {active === "inicio" && (
+          <>
+            <section className="admin-hero lighthouse-hero">
+              <div>
+                <span>Bienvenido</span>
+                <h1>Bienvenido al panel institucional CELIDER Regional 10</h1>
+                <p>Gestiona eventos, carga listados, asigna países, verifica asistencia y consulta auditoría desde un entorno protegido por roles.</p>
+              </div>
+            </section>
+            <section className="metrics-grid">
+              <Metric icon={BarChart3} label="Eventos" value={eventos.length} note="Registrados" />
+              <Metric icon={Users} label="Delegados" value={totalDelegados} note="Cargados" />
+              <Metric icon={FileSpreadsheet} label="Comisiones" value={totalComisiones} note="Configuradas" />
+              <Metric icon={ShieldCheck} label="Seguridad" value="Activa" note="Acceso por roles" />
+            </section>
+          </>
+        )}
         {active === "eventos" && (eventoActivo ? <EventoDetalle user={user} evento={eventoActivo} onBack={() => { setEventoActivo(null); load(); }} /> : <EventosPanel user={user} eventos={eventos} setEventos={setEventos} distritos={distritos} onReload={load} setEventoActivo={setEventoActivo} />)}
         {active === "calificaciones" && (eventoActivo ? <EventoDetalle user={user} evento={eventoActivo} initialView="calificaciones" onBack={() => { setEventoActivo(null); load(); }} /> : <EventosPanel user={user} eventos={eventos} setEventos={setEventos} distritos={distritos} onReload={load} setEventoActivo={setEventoActivo} />)}
         {active === "agenda" && <AgendaPanel eventos={eventos} />}

@@ -375,22 +375,29 @@ label {
 .lighthouse-hero {
   position: relative;
   overflow: hidden;
-  min-height: 170px;
+  min-height: 200px;
+  background:
+    linear-gradient(115deg, rgba(7, 28, 48, 0.88) 0%, rgba(15, 45, 75, 0.76) 55%, rgba(7, 28, 48, 0.92) 100%),
+    url('/imagenes/faro_a_colon.jpg') center/cover no-repeat !important;
+  border: 1px solid rgba(127, 215, 255, 0.32);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  color: #ffffff;
 }
 
-.lighthouse-hero::after {
-  content: "";
-  position: absolute;
-  right: clamp(18px, 5vw, 72px);
-  bottom: -10px;
-  width: 120px;
-  height: 160px;
-  opacity: 0.16;
-  background:
-    linear-gradient(90deg, transparent 0 38%, var(--navy) 38% 62%, transparent 62%),
-    radial-gradient(circle at 50% 14%, var(--gold) 0 14px, transparent 15px),
-    linear-gradient(115deg, transparent 0 42%, rgba(201, 151, 43, 0.6) 43% 46%, transparent 47%);
-  clip-path: polygon(38% 0, 62% 0, 76% 100%, 24% 100%);
+.lighthouse-hero h1 {
+  color: #ffffff !important;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  font-weight: 850;
+}
+
+.lighthouse-hero span {
+  color: #7fd7ff !important;
+  letter-spacing: 0.12em;
+}
+
+.lighthouse-hero p {
+  color: rgba(240, 248, 255, 0.94) !important;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
 .agenda-list {

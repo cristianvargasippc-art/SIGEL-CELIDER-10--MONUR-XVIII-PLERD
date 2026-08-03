@@ -96,8 +96,17 @@ eventosRouter.delete("/:eventoId", verifyToken, authorize("superadmin", "distrit
       select: { id: true }
     });
     const delegadoIds = delegados.map((d) => d.id);
+    const comisiones = await prisma.comision.findMany({
+      where: { eventoId },
+      select: { id: true }
+    });
+    const comisionIds = comisiones.map((c) => c.id);
 
     await prisma.$transaction([
+      prisma.user.updateMany({
+        where: { comisionId: { in: comisionIds } },
+        data: { comisionId: null }
+      }),
       prisma.calificacion.deleteMany({
         where: { delegadoId: { in: delegadoIds } }
       }),
@@ -354,8 +363,11 @@ eventosRouter.delete("/:eventoId/comisiones", verifyToken, authorize("superadmin
 
     const delegados = await prisma.delegado.findMany({ where: { eventoId }, select: { id: true } });
     const delegadoIds = delegados.map((d) => d.id);
+    const comisiones = await prisma.comision.findMany({ where: { eventoId }, select: { id: true } });
+    const comisionIds = comisiones.map((c) => c.id);
 
     await prisma.$transaction([
+      prisma.user.updateMany({ where: { comisionId: { in: comisionIds } }, data: { comisionId: null } }),
       prisma.calificacion.deleteMany({ where: { delegadoId: { in: delegadoIds } } }),
       prisma.delegado.deleteMany({ where: { eventoId } }),
       prisma.comision.deleteMany({ where: { eventoId } })
