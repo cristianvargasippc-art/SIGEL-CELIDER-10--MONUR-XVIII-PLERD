@@ -20,6 +20,16 @@ import { logger } from "./utils/logger.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// ── Validate required environment variables ──────────────────────────────────
+const requiredEnvVars = ["DATABASE_URL", "JWT_SECRET"];
+const missingVars = requiredEnvVars.filter((v) => !process.env[v]);
+if (missingVars.length > 0) {
+  console.error(`❌ FATAL: Missing required environment variables: ${missingVars.join(", ")}`);
+  console.error("   Configure them in Hostinger hPanel → Environment Variables");
+  process.exit(1);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 const app = express();
 const port = Number(process.env.PORT || 3000);
 
