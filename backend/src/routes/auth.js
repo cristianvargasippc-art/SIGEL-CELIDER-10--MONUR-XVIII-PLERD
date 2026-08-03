@@ -10,86 +10,96 @@ import { loginLimiter, checkLoginAttempts, recordFailedAttempt, clearLoginAttemp
 export const authRouter = Router();
 
 authRouter.post("/login", loginLimiter, validate(loginSchema), async (req, res) => {
-  const { email, password } = req.body;
-  const ip = req.ip || req.connection?.remoteAddress || "unknown";
+  try {
+    const { email, password } = req.body;
+    const ip = req.ip || req.connection?.remoteAddress || "unknown";
 
-  // Check in-memory rate limit (fallback when Redis is not available)
-  const check = checkLoginAttempts(ip);
-  if (check.blocked) {
-    await prisma.audit.create({
-      data: {
-        userId: null,
-        action: "login_bloqueado_demasiados_intentos",
-        entityType: "user",
-        changes: { ip, email, retryAfterMinutes: check.retryAfter }
+    // Check in-memory rate limit (fallback when Redis is not available)
+    const check = checkLoginAttempts(ip);
+    if (check.blocked) {
+      await prisma.audit.create({
+        data: {
+          userId: null,
+          action: "login_bloqueado_demasiados_intentos",
+          entityType: "user",
+          changes: { ip, email, retryAfterMinutes: check.retryAfter }
+        }
+      });
+      return res.status(429).json({ error: `Demasiados intentos fallidos. Intente nuevamente en ${check.retryAfter} minuto(s).` });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    if (!user || user.estado !== "activo" || user.deletedAt) {
+      recordFailedAttempt(ip);
+      await prisma.audit.create({
+        data: {
+          userId: null,
+          action: "login_fallido_usuario_inexistente",
+          entityType: "user",
+          changes: { email, ip }
+        }
+      });
+      return res.status(401).json({ error: "Credenciales invalidas" });
+    }
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      recordFailedAttempt(ip);
+      const newCheck = checkLoginAttempts(ip);
+      await prisma.audit.create({
+        data: {
+          userId: user.id,
+          action: "login_fallido_contrasena_incorrecta",
+          entityType: "user",
+          entityId: user.id,
+          changes: { email: user.email, ip, intentos_restantes: newCheck.remaining ?? 0 }
+        }
+      });
+      if (newCheck.blocked) {
+        return res.status(429).json({ error: `Cuenta bloqueada por ${newCheck.retryAfter} minuto(s) debido a múltiples intentos fallidos.` });
       }
-    });
-    return res.status(429).json({ error: `Demasiados intentos fallidos. Intente nuevamente en ${check.retryAfter} minuto(s).` });
-  }
+      return res.status(401).json({ error: "Credenciales invalidas" });
+    }
 
-  const user = await prisma.user.findUnique({ where: { email } });
-
-  if (!user || user.estado !== "activo" || user.deletedAt) {
-    recordFailedAttempt(ip);
-    await prisma.audit.create({
-      data: {
-        userId: null,
-        action: "login_fallido_usuario_inexistente",
-        entityType: "user",
-        changes: { email, ip }
-      }
-    });
-    return res.status(401).json({ error: "Credenciales invalidas" });
-  }
-
-  const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) {
-    recordFailedAttempt(ip);
-    const newCheck = checkLoginAttempts(ip);
+    clearLoginAttempts(ip);
+    await prisma.user.update({ where: { id: user.id }, data: { ultimoLogin: new Date() } });
     await prisma.audit.create({
       data: {
         userId: user.id,
-        action: "login_fallido_contrasena_incorrecta",
+        action: "login",
         entityType: "user",
         entityId: user.id,
-        changes: { email: user.email, ip, intentos_restantes: newCheck.remaining ?? 0 }
+        changes: { email: user.email, role: user.role }
       }
     });
-    if (newCheck.blocked) {
-      return res.status(429).json({ error: `Cuenta bloqueada por ${newCheck.retryAfter} minuto(s) debido a múltiples intentos fallidos.` });
-    }
-    return res.status(401).json({ error: "Credenciales invalidas" });
+
+    const payload = { id: user.id, email: user.email, role: user.role, distrito_id: user.distritoId, comision_id: user.comisionId };
+    const accessToken = jwt.sign(payload, process.env.JWT_SECRET, {
+      expiresIn: Number(process.env.JWT_EXPIRATION || 3600)
+    });
+    const refreshToken = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "7d" });
+
+    res.cookie("refresh_token", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
+    return res.json({
+      access_token: accessToken,
+      user: payload
+    });
+  } catch (error) {
+    const { logger } = await import("../utils/logger.js");
+    logger.error("Login error", { error: error.message, stack: error.stack, code: error.code });
+    return res.status(500).json({
+      error: "Error interno del servidor",
+      debug_detail: error.message,
+      debug_code: error.code || null
+    });
   }
-
-  clearLoginAttempts(ip);
-  await prisma.user.update({ where: { id: user.id }, data: { ultimoLogin: new Date() } });
-  await prisma.audit.create({
-    data: {
-      userId: user.id,
-      action: "login",
-      entityType: "user",
-      entityId: user.id,
-      changes: { email: user.email, role: user.role }
-    }
-  });
-
-  const payload = { id: user.id, email: user.email, role: user.role, distrito_id: user.distritoId, comision_id: user.comisionId };
-  const accessToken = jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: Number(process.env.JWT_EXPIRATION || 3600)
-  });
-  const refreshToken = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "7d" });
-
-  res.cookie("refresh_token", refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 7 * 24 * 60 * 60 * 1000
-  });
-
-  return res.json({
-    access_token: accessToken,
-    user: payload
-  });
 });
 
 authRouter.post("/logout", (_req, res) => {
