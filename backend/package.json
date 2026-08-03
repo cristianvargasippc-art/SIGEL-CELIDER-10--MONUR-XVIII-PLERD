@@ -6,10 +6,14 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
+    "build": "prisma generate",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "seed": "node src/seed.js",
     "test": "node test/ponderada.test.js"
+  },
+  "engines": {
+    "node": "22.x"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
