@@ -27,9 +27,16 @@ export function pickClean(row, names, maxLength = 255) {
 export function assertExcelFile(file) {
   const allowed = [
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/octet-stream"
+    "application/octet-stream",
+    "application/vnd.ms-excel",
+    "application/x-excel",
+    "application/x-msexcel"
   ];
   if (!file) throw new Error("Archivo requerido");
-  if (!file.originalname.toLowerCase().endsWith(".xlsx")) throw new Error("Solo se permiten archivos .xlsx");
-  if (!allowed.includes(file.mimetype)) throw new Error("Tipo de archivo no permitido. Usa un archivo .xlsx");
+  if (!file.originalname || !file.originalname.toLowerCase().endsWith(".xlsx")) {
+    throw new Error("Solo se permiten archivos .xlsx");
+  }
+  if (file.mimetype && !allowed.includes(file.mimetype.toLowerCase())) {
+    throw new Error("Tipo de archivo no permitido. Usa un archivo .xlsx");
+  }
 }

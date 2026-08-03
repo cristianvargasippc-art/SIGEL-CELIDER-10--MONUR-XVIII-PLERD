@@ -407,7 +407,6 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     setDelegados((current) => current.map((d) => d.id === id ? { ...d, asistencia: estado } : d));
     try {
       await apiRequest(`/api/eventos/${evento.id}/asistencia/${id}`, { method: "PATCH", body: JSON.stringify({ estado }) });
-      await load();
     } catch (error) {
       setDelegados(previous);
       window.alert(error.message);
@@ -421,7 +420,6 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
       setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "" } : d));
       try {
         await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: null }) });
-        await load();
       } catch (error) {
         setDelegados(previous);
         window.alert(error.message);
@@ -440,7 +438,6 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: nextValue } : d));
     try {
       await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: nextValue }) });
-      await load();
     } catch (error) {
       setDelegados(previous);
       window.alert(error.message);
@@ -452,7 +449,6 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     setDelegados((current) => current.map((d) => d.id === id ? { ...d, avanza: etapa } : d));
     try {
       await apiRequest(`/api/eventos/${evento.id}/avanza/${id}`, { method: "PATCH", body: JSON.stringify({ avanza: etapa }) });
-      await load();
     } catch (error) {
       setDelegados(previous);
       window.alert(error.message);
@@ -1005,7 +1001,7 @@ function Dashboard({ user, onLogout }) {
         <div className="sidebar-account">
           <span className="role-pill">{user.role}</span>
           <strong>{user.email}</strong>
-          <button className="btn secondary full" onClick={onLogout}><LogOut size={16} /> Cerrar sesión</button>
+          <button className="btn secondary full" onClick={onLogout} type="button"><LogOut size={16} /> Cerrar sesión</button>
         </div>
       </aside>
       <main className="workspace">
@@ -1143,10 +1139,17 @@ function App() {
   }, []);
 
   async function logout() {
-    await apiRequest("/api/auth/logout", { method: "POST" }).catch(() => {});
     setAccessToken(null);
     setUser(null);
     setPage("home");
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      await apiRequest("/api/auth/logout", { method: "POST", signal: controller.signal });
+      clearTimeout(timeoutId);
+    } catch (err) {
+      console.warn("Logout background request:", err);
+    }
   }
 
   if (user) return <Dashboard user={user} onLogout={logout} />;

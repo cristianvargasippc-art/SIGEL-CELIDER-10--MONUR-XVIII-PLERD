@@ -1,5 +1,4 @@
 import { Router } from "express";
-import { unlink } from "fs/promises";
 import multer from "multer";
 import XLSX from "xlsx";
 import { prisma } from "../db.js";
@@ -8,7 +7,7 @@ import { validate } from "../middleware/validate.js";
 import { delegadoSchema, eventoSchema } from "../schemas.js";
 import { assertExcelFile, pickClean } from "../utils/safeExcel.js";
 
-const upload = multer({ dest: "uploads/", limits: { fileSize: 5 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 const DISTRITOS = ["10-01", "10-02", "10-03", "10-04", "10-05", "10-06", "10-07"];
 const MAX_EVENTOS_DISTRITO = Number(process.env.MAX_EVENTOS_DISTRITO || 30);
 
@@ -209,7 +208,7 @@ eventosRouter.post("/:eventoId/import/delegados", verifyToken, authorize("supera
     const eventoId = Number(req.params.eventoId);
     const permission = await canAccessEvent(req.user, eventoId);
     if (permission.error) return res.status(permission.error[0]).json({ error: permission.error[1] });
-    const workbook = XLSX.readFile(req.file.path, { cellFormula: false });
+    const workbook = XLSX.read(req.file.buffer, { type: "buffer", cellFormula: false });
     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" });
     const errors = [];
     const comisiones = await prisma.comision.findMany({ where: { eventoId } });
@@ -277,8 +276,6 @@ eventosRouter.post("/:eventoId/import/delegados", verifyToken, authorize("supera
     return res.json({ imported_count: importResult.count, errors: [] });
   } catch (error) {
     return res.status(400).json({ error: error.message });
-  } finally {
-    if (req.file?.path) await unlink(req.file.path).catch(() => {});
   }
 });
 
@@ -288,7 +285,7 @@ eventosRouter.post("/:eventoId/import/comisiones", verifyToken, authorize("super
     const eventoId = Number(req.params.eventoId);
     const permission = await canAccessEvent(req.user, eventoId);
     if (permission.error) return res.status(permission.error[0]).json({ error: permission.error[1] });
-    const workbook = XLSX.readFile(req.file.path, { cellFormula: false });
+    const workbook = XLSX.read(req.file.buffer, { type: "buffer", cellFormula: false });
     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" });
     const errors = [];
     const nombres = new Set();
@@ -325,8 +322,6 @@ eventosRouter.post("/:eventoId/import/comisiones", verifyToken, authorize("super
     return res.json({ imported_count: nombres.size, errors: [] });
   } catch (error) {
     return res.status(400).json({ error: error.message });
-  } finally {
-    if (req.file?.path) await unlink(req.file.path).catch(() => {});
   }
 });
 
