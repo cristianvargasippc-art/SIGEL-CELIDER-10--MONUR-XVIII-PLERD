@@ -1,0 +1,12 @@
+{
+  "name": "sigel-celider-10-monur-xviii",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install": "cd backend && npm install",
+    "start": "cd backend && npm start"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}
