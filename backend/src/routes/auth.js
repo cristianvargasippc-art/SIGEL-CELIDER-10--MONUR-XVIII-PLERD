@@ -5,21 +5,38 @@ import { prisma } from "../db.js";
 import { loginSchema } from "../schemas.js";
 import { validate } from "../middleware/validate.js";
 import { verifyToken } from "../middleware/auth.js";
-import { loginLimiter } from "../middleware/rateLimit.js";
+import { loginLimiter, checkLoginAttempts, recordFailedAttempt, clearLoginAttempts } from "../middleware/rateLimit.js";
 
 export const authRouter = Router();
 
 authRouter.post("/login", loginLimiter, validate(loginSchema), async (req, res) => {
   const { email, password } = req.body;
+  const ip = req.ip || req.connection?.remoteAddress || "unknown";
+
+  // Check in-memory rate limit (fallback when Redis is not available)
+  const check = checkLoginAttempts(ip);
+  if (check.blocked) {
+    await prisma.audit.create({
+      data: {
+        userId: null,
+        action: "login_bloqueado_demasiados_intentos",
+        entityType: "user",
+        changes: { ip, email, retryAfterMinutes: check.retryAfter }
+      }
+    });
+    return res.status(429).json({ error: `Demasiados intentos fallidos. Intente nuevamente en ${check.retryAfter} minuto(s).` });
+  }
+
   const user = await prisma.user.findUnique({ where: { email } });
 
   if (!user || user.estado !== "activo" || user.deletedAt) {
+    recordFailedAttempt(ip);
     await prisma.audit.create({
       data: {
         userId: null,
         action: "login_fallido_usuario_inexistente",
         entityType: "user",
-        changes: { email }
+        changes: { email, ip }
       }
     });
     return res.status(401).json({ error: "Credenciales invalidas" });
@@ -27,18 +44,24 @@ authRouter.post("/login", loginLimiter, validate(loginSchema), async (req, res) 
 
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) {
+    recordFailedAttempt(ip);
+    const newCheck = checkLoginAttempts(ip);
     await prisma.audit.create({
       data: {
         userId: user.id,
         action: "login_fallido_contrasena_incorrecta",
         entityType: "user",
         entityId: user.id,
-        changes: { email: user.email }
+        changes: { email: user.email, ip, intentos_restantes: newCheck.remaining ?? 0 }
       }
     });
+    if (newCheck.blocked) {
+      return res.status(429).json({ error: `Cuenta bloqueada por ${newCheck.retryAfter} minuto(s) debido a múltiples intentos fallidos.` });
+    }
     return res.status(401).json({ error: "Credenciales invalidas" });
   }
 
+  clearLoginAttempts(ip);
   await prisma.user.update({ where: { id: user.id }, data: { ultimoLogin: new Date() } });
   await prisma.audit.create({
     data: {

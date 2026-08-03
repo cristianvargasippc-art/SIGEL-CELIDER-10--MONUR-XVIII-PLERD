@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { unlink } from "fs/promises";
 import multer from "multer";
 import XLSX from "xlsx";
 import { prisma } from "../db.js";
@@ -19,12 +20,18 @@ function scopeWhere(user) {
 }
 
 async function canAccessEvent(user, eventoId) {
+  if (!Number.isInteger(eventoId) || eventoId <= 0) return { error: [400, "Evento invalido"] };
   const evento = await prisma.evento.findUnique({ where: { id: eventoId } });
   if (!evento) return { error: [404, "Evento no existe"] };
   if ((user.role === "distrito" || user.role === "admin") && evento.distritoId !== user.distrito_id) {
     return { error: [403, "Evento fuera de tu distrito"] };
   }
   return { evento };
+}
+
+async function findDelegadoInEvent(eventoId, delegadoId) {
+  if (!Number.isInteger(delegadoId) || delegadoId <= 0) return null;
+  return prisma.delegado.findFirst({ where: { id: delegadoId, eventoId } });
 }
 
 export async function ensureDistricts() {
@@ -63,7 +70,7 @@ eventosRouter.post("/", verifyToken, authorize("superadmin", "distrito"), valida
 
   const count = await prisma.evento.count({ where: { distritoId } });
   if (count >= MAX_EVENTOS_DISTRITO) {
-    return res.status(400).json({ error: `Limite de ${MAX_EVENTOS_DISTRITO} eventos alcanzado para este distrito` });
+    return res.status(400).json({ error: `Límite de ${MAX_EVENTOS_DISTRITO} eventos alcanzado para este distrito` });
   }
 
   const evento = await prisma.evento.create({
@@ -118,12 +125,26 @@ eventosRouter.get("/:eventoId/delegados", verifyToken, authorize("superadmin", "
   const eventoId = Number(req.params.eventoId);
   const permission = await canAccessEvent(req.user, eventoId);
   if (permission.error) return res.status(permission.error[0]).json({ error: permission.error[1] });
+  const where = req.user.role === "admin" && req.user.comision_id
+    ? { eventoId, comisionId: req.user.comision_id }
+    : { eventoId };
   const delegados = await prisma.delegado.findMany({
-    where: { eventoId },
+    where,
     include: { comision: true, calificacion: true },
     orderBy: [{ comisionId: "asc" }, { nombre: "asc" }]
   });
   return res.json(delegados);
+});
+
+eventosRouter.get("/:eventoId/comisiones", verifyToken, authorize("superadmin", "regional", "distrito", "admin"), async (req, res) => {
+  const eventoId = Number(req.params.eventoId);
+  const permission = await canAccessEvent(req.user, eventoId);
+  if (permission.error) return res.status(permission.error[0]).json({ error: permission.error[1] });
+  const comisiones = await prisma.comision.findMany({
+    where: { eventoId },
+    orderBy: { nombre: "asc" }
+  });
+  return res.json(comisiones);
 });
 
 eventosRouter.post("/:eventoId/delegados", verifyToken, authorize("superadmin", "distrito"), validate(delegadoSchema), async (req, res) => {
@@ -151,6 +172,8 @@ eventosRouter.patch("/:eventoId/asistencia/:delegadoId", verifyToken, authorize(
   if (!["presente_votando", "ausente"].includes(estado)) return res.status(400).json({ error: "Estado invalido" });
   const permission = await canAccessEvent(req.user, eventoId);
   if (permission.error) return res.status(permission.error[0]).json({ error: permission.error[1] });
+  const existing = await findDelegadoInEvent(eventoId, delegadoId);
+  if (!existing) return res.status(404).json({ error: "Delegado no existe en este evento" });
   const delegado = await prisma.delegado.update({ where: { id: delegadoId }, data: { asistencia: estado } });
   await prisma.calificacion.upsert({
     where: { delegadoId },
@@ -165,8 +188,19 @@ eventosRouter.patch("/:eventoId/avanza/:delegadoId", verifyToken, authorize("sup
   const delegadoId = Number(req.params.delegadoId);
   const permission = await canAccessEvent(req.user, eventoId);
   if (permission.error) return res.status(permission.error[0]).json({ error: permission.error[1] });
-  const delegado = await prisma.delegado.update({ where: { id: delegadoId }, data: { avanzaEtapa: Boolean(req.body.avanza) } });
-  return res.json(delegado);
+  const existing = await findDelegadoInEvent(eventoId, delegadoId);
+  if (!existing) return res.status(404).json({ error: "Delegado no existe en este evento" });
+  const VALID_ETAPAS = ["no", "distrital", "regional", "minume"];
+  const etapa = VALID_ETAPAS.includes(req.body.avanza) ? req.body.avanza : "no";
+  const avanza = etapa !== "no";
+  await prisma.delegado.update({ where: { id: delegadoId }, data: { avanzaEtapa: avanza } });
+  // Store the specific stage label in the calificacion record
+  await prisma.calificacion.upsert({
+    where: { delegadoId },
+    update: { pasaMinumeXvii: etapa === "minume", feedback: `etapa:${etapa}` },
+    create: { delegadoId, pasaMinumeXvii: etapa === "minume", ponderada: 0, feedback: `etapa:${etapa}` }
+  });
+  return res.json({ id: delegadoId, avanzaEtapa: avanza, etapa });
 });
 
 eventosRouter.post("/:eventoId/import/delegados", verifyToken, authorize("superadmin", "distrito"), upload.single("file"), async (req, res) => {
@@ -177,9 +211,10 @@ eventosRouter.post("/:eventoId/import/delegados", verifyToken, authorize("supera
     if (permission.error) return res.status(permission.error[0]).json({ error: permission.error[1] });
     const workbook = XLSX.readFile(req.file.path, { cellFormula: false });
     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" });
-    console.log("Delegados parsed rows preview:", JSON.stringify(rows.slice(0, 3)));
-    let imported = 0;
     const errors = [];
+    const comisiones = await prisma.comision.findMany({ where: { eventoId } });
+    const comisionByName = new Map(comisiones.map((c) => [c.nombre.toLowerCase().trim(), c]));
+    const delegates = [];
     for (const [index, row] of rows.entries()) {
       try {
         const nombreCompleto = pickClean(row, ["Nombre Completo", "Nombre", "Delegado", "nombre"], 255);
@@ -208,32 +243,26 @@ eventosRouter.post("/:eventoId/import/delegados", verifyToken, authorize("supera
         // Buscar comisión si está especificada en la fila
         let comisionId = null;
         if (comisionNombre) {
-          const comision = await prisma.comision.findFirst({
-            where: {
-              nombre: comisionNombre,
-              eventoId
-            }
-          });
+          const comision = comisionByName.get(comisionNombre.toLowerCase().trim());
           if (!comision) {
             throw new Error(`La comisión '${comisionNombre}' no existe en este evento. Debe crearla primero o subir la comisión en el paso 1.`);
           }
           comisionId = comision.id;
         }
 
-        await prisma.delegado.create({
-          data: {
-            nombre,
-            apellido,
-            eventoId,
-            comisionId,
-            asistencia: "presente_votando"
-          }
-        });
-        imported += 1;
+        delegates.push({ nombre, apellido, eventoId, comisionId, asistencia: "presente_votando" });
       } catch (error) {
         errors.push({ row: index + 2, error: error.message });
       }
     }
+
+    if (errors.length > 0) {
+      return res.status(400).json({ error: "El archivo contiene filas invalidas. No se importo ningun delegado.", imported_count: 0, errors });
+    }
+
+    const importResult = delegates.length
+      ? await prisma.delegado.createMany({ data: delegates })
+      : { count: 0 };
     
     await prisma.audit.create({
       data: {
@@ -241,13 +270,15 @@ eventosRouter.post("/:eventoId/import/delegados", verifyToken, authorize("supera
         action: "excel_delegados_importados",
         entityType: "evento",
         entityId: eventoId,
-        changes: { imported_count: imported, error_count: errors.length }
+        changes: { imported_count: importResult.count, error_count: 0 }
       }
     });
 
-    return res.json({ imported_count: imported, errors });
+    return res.json({ imported_count: importResult.count, errors: [] });
   } catch (error) {
     return res.status(400).json({ error: error.message });
+  } finally {
+    if (req.file?.path) await unlink(req.file.path).catch(() => {});
   }
 });
 
@@ -259,23 +290,27 @@ eventosRouter.post("/:eventoId/import/comisiones", verifyToken, authorize("super
     if (permission.error) return res.status(permission.error[0]).json({ error: permission.error[1] });
     const workbook = XLSX.readFile(req.file.path, { cellFormula: false });
     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: "" });
-    console.log("Comisiones parsed rows preview:", JSON.stringify(rows.slice(0, 3)));
-    let imported = 0;
     const errors = [];
+    const nombres = new Set();
     for (const [index, row] of rows.entries()) {
       try {
         const nombre = pickClean(row, ["Comisiones", "Comision", "Comisión", "Comite", "Comité", "comisiones"], 180);
         if (!nombre) throw new Error("Columna comisiones requerida");
-        await prisma.comision.upsert({
-          where: { nombre_eventoId: { nombre, eventoId } },
-          update: {},
-          create: { nombre, eventoId }
-        });
-        imported += 1;
+        nombres.add(nombre);
       } catch (error) {
         errors.push({ row: index + 2, error: error.message });
       }
     }
+
+    if (errors.length > 0) {
+      return res.status(400).json({ error: "El archivo contiene filas invalidas. No se importo ninguna comision.", imported_count: 0, errors });
+    }
+
+    await prisma.$transaction([...nombres].map((nombre) => prisma.comision.upsert({
+      where: { nombre_eventoId: { nombre, eventoId } },
+      update: {},
+      create: { nombre, eventoId }
+    })));
 
     await prisma.audit.create({
       data: {
@@ -283,13 +318,15 @@ eventosRouter.post("/:eventoId/import/comisiones", verifyToken, authorize("super
         action: "excel_comisiones_importadas",
         entityType: "evento",
         entityId: eventoId,
-        changes: { imported_count: imported, error_count: errors.length }
+        changes: { imported_count: nombres.size, error_count: 0 }
       }
     });
 
-    return res.json({ imported_count: imported, errors });
+    return res.json({ imported_count: nombres.size, errors: [] });
   } catch (error) {
     return res.status(400).json({ error: error.message });
+  } finally {
+    if (req.file?.path) await unlink(req.file.path).catch(() => {});
   }
 });
 
@@ -369,25 +406,59 @@ eventosRouter.post("/:eventoId/asignar", verifyToken, authorize("superadmin", "d
   const comisionId = Number(req.body.comision_id);
   const modo = req.body.modo === "duplas" ? "duplas" : "individual";
   const paises = Array.isArray(req.body.paises) ? req.body.paises.map((p) => String(p).trim()).filter(Boolean) : [];
+  const cantidad = req.body.cantidad ? Number(req.body.cantidad) : null;
+  if (!Number.isInteger(comisionId) || comisionId <= 0) return res.status(400).json({ error: "Comisión requerida" });
+  if (cantidad !== null && (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > 500)) {
+    return res.status(400).json({ error: "Cantidad inválida" });
+  }
+  if (paises.some((pais) => pais.length > 120)) return res.status(400).json({ error: "País inválido" });
+
   const comision = await prisma.comision.findUnique({ where: { id: comisionId } });
-  if (!comision || comision.eventoId !== eventoId) return res.status(404).json({ error: "Comision no existe en este evento" });
+  if (!comision || comision.eventoId !== eventoId) return res.status(404).json({ error: "Comisión no existe en este evento" });
+
   const esCorte = /corte internacional de justicia|cij/i.test(comision.nombre);
-  if (!esCorte && paises.length === 0) return res.status(400).json({ error: "Selecciona paises para asignar" });
-  const delegados = await prisma.delegado.findMany({ where: { eventoId, comisionId, asistencia: "presente_votando" }, orderBy: { nombre: "asc" } });
+  if (!esCorte && paises.length === 0) return res.status(400).json({ error: "Selecciona países para asignar" });
+
+  const allDelegados = await prisma.delegado.findMany({
+    where: {
+      eventoId,
+      OR: [
+        { comisionId },
+        { comisionId: null }
+      ]
+    },
+    orderBy: { nombre: "asc" }
+  });
+  const sinAsignar = allDelegados.filter((d) => !d.designacion || d.designacion.trim() === "");
+  const toAssign = cantidad ? sinAsignar.slice(0, cantidad) : sinAsignar;
+  if (cantidad && cantidad > sinAsignar.length) {
+    return res.status(400).json({ error: `Solo hay ${sinAsignar.length} delegado(s) sin asignar en esta comisión.` });
+  }
+
+  if (toAssign.length === 0) {
+    return res.status(400).json({ error: "Todos los delegados de esta comisión ya tienen país asignado." });
+  }
+
   const shuffled = [...paises].sort(() => Math.random() - 0.5);
   const updates = [];
-  for (let index = 0; index < delegados.length; index += 1) {
+  for (let index = 0; index < toAssign.length; index += 1) {
     const grupo = modo === "duplas" ? Math.floor(index / 2) : index;
     let primerApellido = "";
-    if (delegados[index].apellido) {
-      primerApellido = delegados[index].apellido.trim().split(/\s+/)[0];
+    if (toAssign[index].apellido) {
+      primerApellido = toAssign[index].apellido.trim().split(/\s+/)[0];
     } else {
-      primerApellido = delegados[index].nombre.trim().split(/\s+/)[0];
+      primerApellido = toAssign[index].nombre.trim().split(/\s+/)[0];
     }
     const designacion = esCorte ? `Su Excelencia ${primerApellido}` : shuffled[grupo % shuffled.length];
-    updates.push(prisma.delegado.update({ where: { id: delegados[index].id }, data: { designacion, asignacionGrupo: `${modo}-${grupo + 1}` } }));
+    updates.push(prisma.delegado.update({
+      where: { id: toAssign[index].id },
+      data: { comisionId, designacion, asignacionGrupo: `${modo}-${grupo + 1}` }
+    }));
   }
-  await prisma.$transaction([prisma.comision.update({ where: { id: comisionId }, data: { modoAsignacion: modo } }), ...updates]);
+  await prisma.$transaction([
+    prisma.comision.update({ where: { id: comisionId }, data: { modoAsignacion: modo } }),
+    ...updates
+  ]);
   return res.json({ assigned_count: updates.length });
 });
 

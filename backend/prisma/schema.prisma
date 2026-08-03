@@ -5,17 +5,18 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl= env("DIRECT_URL")
 }
 
 model Comision {
   id        Int        @id @default(autoincrement())
-  nombre    String     @db.VarChar(255)
+  nombre    String
   eventoId  Int?       @map("evento_id")
   createdAt DateTime   @default(now()) @map("created_at")
   evento    Evento?    @relation(fields: [eventoId], references: [id], onDelete: Cascade)
   users     User[]
   delegados Delegado[]
-  modoAsignacion ModoAsignacion @default(individual) @map("modo_asignacion")
+  modoAsignacion String @default("individual") @map("modo_asignacion")
 
   @@unique([nombre, eventoId])
   @@index([eventoId])
@@ -24,8 +25,8 @@ model Comision {
 
 model Distrito {
   id        Int      @id @default(autoincrement())
-  codigo    String   @unique @db.VarChar(10)
-  nombre    String   @db.VarChar(120)
+  codigo    String   @unique
+  nombre    String
   createdAt DateTime @default(now()) @map("created_at")
   users     User[]
   eventos   Evento[]
@@ -35,10 +36,10 @@ model Distrito {
 
 model Evento {
   id          Int          @id @default(autoincrement())
-  nombre      String       @db.VarChar(180)
+  nombre      String
   fecha       DateTime?
   distritoId  Int          @map("distrito_id")
-  estado      EstadoEvento @default(borrador)
+  estado      String       @default("borrador")
   createdById Int?         @map("created_by_id")
   createdAt   DateTime     @default(now()) @map("created_at")
   updatedAt   DateTime     @updatedAt @map("updated_at")
@@ -53,13 +54,13 @@ model Evento {
 
 model User {
   id           Int        @id @default(autoincrement())
-  email        String     @unique @db.VarChar(255)
-  passwordHash String     @map("password_hash") @db.VarChar(255)
-  role         Role
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  role         String
   comisionId   Int?       @map("comision_id")
   distritoId   Int?       @map("distrito_id")
   ultimoLogin  DateTime?  @map("ultimo_login")
-  estado       EstadoUser @default(activo)
+  estado       String     @default("activo")
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
   deletedAt    DateTime?  @map("deleted_at")
@@ -76,14 +77,14 @@ model User {
 
 model Delegado {
   id           Int           @id @default(autoincrement())
-  nombre       String        @db.VarChar(255)
-  designacion  String?       @db.VarChar(255)
-  apellido     String?       @db.VarChar(120)
+  nombre       String
+  designacion  String?
+  apellido     String?
   eventoId     Int?          @map("evento_id")
   comisionId   Int?          @map("comision_id")
-  asistencia   PresenteEstado @default(presente_votando)
+  asistencia   String        @default("presente_votando")
   avanzaEtapa  Boolean       @default(false) @map("avanza_etapa")
-  asignacionGrupo String?    @map("asignacion_grupo") @db.VarChar(80)
+  asignacionGrupo String?    @map("asignacion_grupo")
   createdAt    DateTime      @default(now()) @map("created_at")
   evento       Evento?       @relation(fields: [eventoId], references: [id], onDelete: Cascade)
   comision     Comision?     @relation(fields: [comisionId], references: [id])
@@ -104,10 +105,10 @@ model Calificacion {
   liderazgo       Int?
   redaccion       Int?
   ponderada       Float           @default(0)
-  presenteEstado  PresenteEstado? @map("presente_estado")
+  presenteEstado  String?         @map("presente_estado")
   pasaMinumeXvii  Boolean?        @map("pasa_minume_xvii")
-  mencion         String?         @db.Text
-  feedback        String?         @db.Text
+  mencion         String?
+  feedback        String?
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")
   delegado        Delegado        @relation(fields: [delegadoId], references: [id])
@@ -120,8 +121,8 @@ model Calificacion {
 model Audit {
   id         Int      @id @default(autoincrement())
   userId     Int?     @map("user_id")
-  action     String   @db.VarChar(100)
-  entityType String   @map("entity_type") @db.VarChar(100)
+  action     String
+  entityType String   @map("entity_type")
   entityId   Int?     @map("entity_id")
   changes    Json?
   createdAt  DateTime @default(now()) @map("created_at")
@@ -134,47 +135,19 @@ model Audit {
 
 model Config {
   id        Int      @id @default(autoincrement())
-  key       String   @unique @db.VarChar(255)
-  value     String?  @db.Text
+  key       String   @unique
+  value     String?
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("config")
 }
 
-enum Role {
-  superadmin
-  regional
-  distrito
-  admin
-
-  @@map("role")
-}
-
-enum EstadoUser {
-  activo
-  inactivo
-
-  @@map("estado_user")
-}
-
-enum PresenteEstado {
-  presente_votando
-  ausente
-
-  @@map("presente_estado")
-}
-
-enum EstadoEvento {
-  borrador
-  activo
-  cerrado
-
-  @@map("estado_evento")
-}
-
-enum ModoAsignacion {
-  individual
-  duplas
-
-  @@map("modo_asignacion")
-}
+// NOTA: Los enums de Postgres (Role, EstadoUser, PresenteEstado, EstadoEvento, ModoAsignacion)
+// se convirtieron a campos String porque SQLite no soporta enums nativos en Prisma.
+// Los valores posibles siguen siendo los mismos, solo que ahora no se validan a nivel de base de datos:
+//
+// Role:           "superadmin" | "regional" | "distrito" | "admin"
+// EstadoUser:     "activo" | "inactivo"
+// PresenteEstado: "presente_votando" | "ausente"
+// EstadoEvento:   "borrador" | "activo" | "cerrado"
+// ModoAsignacion: "individual" | "duplas"

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   BarChart3,
+  CalendarDays,
   CheckCircle2,
   Download,
   FileSpreadsheet,
@@ -13,8 +14,7 @@ import {
   Upload,
   UserPlus,
   Users,
-  AlignLeft,
-  AlignRight
+  ClipboardCheck
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import "./styles.css";
@@ -25,18 +25,18 @@ const LOGO_SRC = "/imagenes/logo.png";
 const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/api\/?$/, "").replace(/\/$/, "");
 const DISTRITOS = ["10-01", "10-02", "10-03", "10-04", "10-05", "10-06", "10-07"];
 const PAISES = [
-  "Afganistan", "Albania", "Alemania", "Andorra", "Angola", "Antigua y Barbuda", "Arabia Saudita", "Argelia", "Argentina", "Armenia", "Australia", "Austria", "Azerbaiyan",
-  "Bahamas", "Banglades", "Barbados", "Barein", "Belgica", "Belice", "Benin", "Bielorrusia", "Birmania", "Bolivia", "Bosnia y Herzegovina", "Botsuana", "Brasil", "Brunei", "Bulgaria", "Burkina Faso", "Burundi", "Butan",
-  "Cabo Verde", "Camboya", "Camerun", "Canada", "Catar", "Chad", "Chile", "China", "Chipre", "Colombia", "Comoras", "Congo", "Corea del Norte", "Corea del Sur", "Costa de Marfil", "Costa Rica", "Croacia", "Cuba",
-  "Dinamarca", "Dominica", "Ecuador", "Egipto", "El Salvador", "Emiratos Arabes Unidos", "Eritrea", "Eslovaquia", "Eslovenia", "Espana", "Estados Unidos", "Estonia", "Esuatini", "Etiopia",
-  "Filipinas", "Finlandia", "Fiyi", "Francia", "Gabon", "Gambia", "Georgia", "Ghana", "Granada", "Grecia", "Guatemala", "Guinea", "Guinea-Bisau", "Guinea Ecuatorial", "Guyana",
-  "Haiti", "Honduras", "Hungria", "India", "Indonesia", "Irak", "Iran", "Irlanda", "Islandia", "Islas Marshall", "Islas Salomon", "Israel", "Italia", "Jamaica", "Japon", "Jordania",
-  "Kazajistan", "Kenia", "Kirguistan", "Kiribati", "Kuwait", "Laos", "Lesoto", "Letonia", "Libano", "Liberia", "Libia", "Liechtenstein", "Lituania", "Luxemburgo",
-  "Macedonia del Norte", "Madagascar", "Malasia", "Malaui", "Maldivas", "Mali", "Malta", "Marruecos", "Mauricio", "Mauritania", "Mexico", "Micronesia", "Moldavia", "Monaco", "Mongolia", "Montenegro", "Mozambique",
-  "Namibia", "Nauru", "Nepal", "Nicaragua", "Niger", "Nigeria", "Noruega", "Nueva Zelanda", "Oman", "Paises Bajos", "Pakistan", "Palaos", "Panama", "Papua Nueva Guinea", "Paraguay", "Peru", "Polonia", "Portugal",
-  "Reino Unido", "Republica Centroafricana", "Republica Checa", "Republica Democratica del Congo", "Republica Dominicana", "Ruanda", "Rumania", "Rusia",
-  "Samoa", "San Cristobal y Nieves", "San Marino", "San Vicente y las Granadinas", "Santa Lucia", "Santo Tome y Principe", "Senegal", "Serbia", "Seychelles", "Sierra Leona", "Singapur", "Siria", "Somalia", "Sri Lanka", "Sudafrica", "Sudan", "Sudan del Sur", "Suecia", "Suiza", "Surinam",
-  "Tailandia", "Tanzania", "Tayikistan", "Timor Oriental", "Togo", "Tonga", "Trinidad y Tobago", "Tunez", "Turkmenistan", "Turquia", "Tuvalu", "Ucrania", "Uganda", "Uruguay", "Uzbekistan", "Vanuatu", "Vaticano", "Venezuela", "Vietnam", "Yemen", "Yibuti", "Zambia", "Zimbabue"
+  "Afganistán", "Albania", "Alemania", "Andorra", "Angola", "Antigua y Barbuda", "Arabia Saudita", "Argelia", "Argentina", "Armenia", "Australia", "Austria", "Azerbaiyán",
+  "Bahamas", "Bangladés", "Barbados", "Baréin", "Bélgica", "Belice", "Benín", "Bielorrusia", "Birmania", "Bolivia", "Bosnia y Herzegovina", "Botsuana", "Brasil", "Brunéi", "Bulgaria", "Burkina Faso", "Burundi", "Bután",
+  "Cabo Verde", "Camboya", "Camerún", "Canadá", "Catar", "Chad", "Chile", "China", "Chipre", "Colombia", "Comoras", "Congo", "Corea del Norte", "Corea del Sur", "Costa de Marfil", "Costa Rica", "Croacia", "Cuba",
+  "Dinamarca", "Dominica", "Ecuador", "Egipto", "El Salvador", "Emiratos Árabes Unidos", "Eritrea", "Eslovaquia", "Eslovenia", "España", "Estados Unidos", "Estonia", "Esuatini", "Etiopía",
+  "Filipinas", "Finlandia", "Fiyi", "Francia", "Gabón", "Gambia", "Georgia", "Ghana", "Granada", "Grecia", "Guatemala", "Guinea", "Guinea-Bisáu", "Guinea Ecuatorial", "Guyana",
+  "Haití", "Honduras", "Hungría", "India", "Indonesia", "Irak", "Irán", "Irlanda", "Islandia", "Islas Marshall", "Islas Salomón", "Israel", "Italia", "Jamaica", "Japón", "Jordania",
+  "Kazajistán", "Kenia", "Kirguistán", "Kiribati", "Kuwait", "Laos", "Lesoto", "Letonia", "Líbano", "Liberia", "Libia", "Liechtenstein", "Lituania", "Luxemburgo",
+  "Macedonia del Norte", "Madagascar", "Malasia", "Malaui", "Maldivas", "Mali", "Malta", "Marruecos", "Mauricio", "Mauritania", "México", "Micronesia", "Moldavia", "Mónaco", "Mongolia", "Montenegro", "Mozambique",
+  "Namibia", "Nauru", "Nepal", "Nicaragua", "Níger", "Nigeria", "Noruega", "Nueva Zelanda", "Omán", "Países Bajos", "Pakistán", "Palaos", "Panamá", "Papúa Nueva Guinea", "Paraguay", "Perú", "Polonia", "Portugal",
+  "Reino Unido", "República Centroafricana", "República Checa", "República Democrática del Congo", "República Dominicana", "Ruanda", "Rumania", "Rusia",
+  "Samoa", "San Cristóbal y Nieves", "San Marino", "San Vicente y las Granadinas", "Santa Lucía", "Santo Tomé y Príncipe", "Senegal", "Serbia", "Seychelles", "Sierra Leona", "Singapur", "Siria", "Somalia", "Sri Lanka", "Sudáfrica", "Sudán", "Sudán del Sur", "Suecia", "Suiza", "Surinam",
+  "Tailandia", "Tanzania", "Tayikistán", "Timor Oriental", "Togo", "Tonga", "Trinidad y Tobago", "Túnez", "Turkmenistán", "Turquía", "Tuvalu", "Ucrania", "Uganda", "Uruguay", "Uzbekistán", "Vanuatu", "Vaticano", "Venezuela", "Vietnam", "Yemen", "Yibuti", "Zambia", "Zimbabue"
 ];
 
 let accessToken = null;
@@ -73,10 +73,10 @@ async function apiRequest(path, options = {}) {
 
 const criterios = {
   oratoria: { label: "Oratoria", max: 15 },
-  argumentacion: { label: "Argumentacion", max: 25 },
-  negociacion: { label: "Negociacion", max: 20 },
+  argumentacion: { label: "Argumentación", max: 25 },
+  negociacion: { label: "Negociación", max: 20 },
   liderazgo: { label: "Liderazgo", max: 15 },
-  redaccion: { label: "Redaccion", max: 25 }
+  redaccion: { label: "Redacción", max: 25 }
 };
 
 function ponderada(row) {
@@ -85,6 +85,7 @@ function ponderada(row) {
 
 function mapDelegado(row) {
   const cal = row.calificacion || {};
+  const feedbackEtapa = cal.feedback?.startsWith("etapa:") ? cal.feedback.replace("etapa:", "") : null;
   return {
     id: row.id,
     nombre: row.nombre,
@@ -93,12 +94,13 @@ function mapDelegado(row) {
     comision: row.comision?.nombre || "",
     comisionObj: row.comision || null,
     comisionId: row.comisionId || row.comision_id || row.comision?.id || "",
-    avanza: Boolean(row.avanzaEtapa || row.avanza_etapa || cal.pasaMinumeXvii),
-    oratoria: cal.oratoria || 0,
-    argumentacion: cal.argumentacion || 0,
-    negociacion: cal.negociacion || 0,
-    liderazgo: cal.liderazgo || 0,
-    redaccion: cal.redaccion || 0,
+    avanza: feedbackEtapa || (row.avanzaEtapa ? "distrital" : "no"),
+    asistencia: row.asistencia || "presente_votando",
+    oratoria: cal.oratoria ?? "",
+    argumentacion: cal.argumentacion ?? "",
+    negociacion: cal.negociacion ?? "",
+    liderazgo: cal.liderazgo ?? "",
+    redaccion: cal.redaccion ?? "",
     mencion: cal.mencion || "",
     feedback: cal.feedback || ""
   };
@@ -153,7 +155,7 @@ function LoginPage({ onLogin, onBackToHome }) {
         </div>
         <form className="login-form" onSubmit={submit}>
           <label>Correo institucional<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
-          <label>Contrasena<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></label>
+          <label>Contraseña<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" /></label>
           {error && <p className="form-error">{error}</p>}
           <button className="btn primary full" disabled={loading}><Lock size={16} /> {loading ? "Validando..." : "Ingresar"}</button>
           <button type="button" className="btn secondary full" style={{ marginTop: "10px" }} onClick={onBackToHome}>Volver al inicio</button>
@@ -164,33 +166,30 @@ function LoginPage({ onLogin, onBackToHome }) {
 }
 
 function PrivateHome({ goLogin }) {
-  const [align, setAlign] = useState(() => localStorage.getItem("sigel-align") || "left");
   useEffect(() => { document.documentElement.dataset.theme = "light"; localStorage.removeItem("sigel-theme"); }, []);
-  useEffect(() => { document.documentElement.dataset.align = align; localStorage.setItem("sigel-align", align); }, [align]);
   return (
     <main className="home-shell private-home">
       <header className="home-topbar">
         <div className="brand inverse"><LogoMark /><div><strong>SIGEL CELIDER 10</strong><span>Regional 10</span></div></div>
-        <div className="home-controls"><button className="icon-btn" onClick={() => setAlign((value) => value === "left" ? "right" : "left")} aria-label="Cambiar alineación">{align === "left" ? <AlignRight size={16} /> : <AlignLeft size={16} />}</button><button className="btn small light" onClick={goLogin}><Lock size={14} /> Iniciar sesión</button></div>
+        <div className="home-controls"><button className="btn small light" onClick={goLogin}><Lock size={14} /> Iniciar sesión</button></div>
       </header>
       <section className="home-hero private">
         <div className="home-copy">
           <span>Plataforma institucional privada</span>
-          <h1>Gestion de eventos, asistencia y evaluaciones CELIDER</h1>
-          <p>Gestiona eventos, delegados, comisiones y evaluaciones desde una plataforma institucional segura.</p>
+          <h1>Gestión de eventos, asistencia y evaluaciones CELIDER</h1>
+          <p>Administra eventos, delegados, comisiones y evaluaciones desde una plataforma institucional segura.</p>
           <button className="btn primary" onClick={goLogin}><ShieldCheck size={16} /> Acceder al panel</button>
         </div>
         <div className="home-status">
           <div className="status-header"><ShieldCheck size={18} /><span>Operación institucional</span></div>
           <strong>Gestión segura</strong>
-          <p>Usuarios por rol, asignaciones por distrito y comisiones, auditoría y datos protegidos.</p>
+          <p>Usuarios por rol, asignaciones por distrito, auditoría y datos protegidos.</p>
           <div className="mini-stats">{DISTRITOS.map((d) => <span key={d}>{d}<small>Distrito</small></span>)}</div>
         </div>
       </section>
     </main>
   );
 }
-
 function Metric({ icon: Icon, label, value, note }) {
   return <article className="metric-card"><Icon size={18} /><span>{label}</span><strong>{value}</strong><small>{note}</small></article>;
 }
@@ -277,71 +276,129 @@ function EventosPanel({ user, eventos, setEventos, distritos, onReload, setEvent
         </div>
       </article>
       <article className="activity-card">
-        <div className="section-heading compact"><span>Limite operativo</span><h2>Hasta 30 eventos</h2></div>
+        <div className="section-heading compact"><span>Límite operativo</span><h2>Hasta 30 eventos</h2></div>
         <p>Cada distrito puede mantener hasta 30 eventos. El regional visualiza todo, pero no altera la data distrital.</p>
       </article>
     </section>
   );
 }
 
-function EventoDetalle({ evento, onBack }) {
+function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
   const [delegados, setDelegados] = useState([]);
+  const [comisiones, setComisiones] = useState([]);
   const [comisionId, setComisionId] = useState("");
+  const [modo, setModo] = useState("individual");
+  const [cantidad, setCantidad] = useState("");
   const [paisQuery, setPaisQuery] = useState("");
   const [paises, setPaises] = useState([]);
   const [customCountry, setCustomCountry] = useState("");
   const [customCountries, setCustomCountries] = useState(() => JSON.parse(localStorage.getItem("sigel-paises") || "[]"));
-  const [modo, setModo] = useState("individual");
-  const comisiones = useMemo(() => {
-    const map = new Map();
-    delegados.forEach((d) => {
-      if (d.comisionId && !map.has(d.comisionId)) {
-        map.set(d.comisionId, d.comisionObj || d.comision);
-      }
-    });
-    return [...map.entries()].map(([id, val]) => ({
-      id,
-      nombre: typeof val === "string" ? val : val.nombre,
-      modoAsignacion: typeof val === "object" ? val.modoAsignacion : "individual"
-    }));
-  }, [delegados]);
+  const [uploading, setUploading] = useState(false);
+  const [view, setView] = useState(initialView);
+  const canManageEvent = ["superadmin", "distrito"].includes(user?.role);
+  const canTakeAttendance = canManageEvent;
 
   useEffect(() => {
     if (comisionId) {
       const selectedCom = comisiones.find((c) => Number(c.id) === Number(comisionId));
-      if (selectedCom) {
-        setModo(selectedCom.modoAsignacion || "individual");
-      }
+      if (selectedCom) setModo(selectedCom.modoAsignacion || "individual");
+      setPaises([]);
+      setCantidad("");
     }
-  }, [comisionId, comisiones]);
+  }, [comisionId]);
 
   const presentes = delegados.filter((d) => d.asistencia === "presente_votando");
+  const presentesOrdenados = useMemo(() => {
+    return [...presentes].sort((a, b) => {
+      const comisionCompare = (a.comision || "").localeCompare(b.comision || "");
+      if (comisionCompare) return comisionCompare;
+      return `${a.nombre} ${a.apellido}`.localeCompare(`${b.nombre} ${b.apellido}`);
+    });
+  }, [presentes]);
+  const comisionesConPresentes = useMemo(() => {
+    const map = new Map();
+    presentesOrdenados.forEach((delegado) => {
+      const key = delegado.comisionId || "sin-comision";
+      if (!map.has(key)) map.set(key, { id: key, nombre: delegado.comision || "Sin comisión", delegados: [] });
+      map.get(key).delegados.push(delegado);
+    });
+    return [...map.values()];
+  }, [presentesOrdenados]);
 
-  async function load() {
+  const totalDelegados = delegados.length;
+  const totalAsignados = delegados.filter((d) => d.designacion && d.designacion.trim() !== "").length;
+  const totalSinAsignar = totalDelegados - totalAsignados;
+
+  const comisionDelegados = useMemo(() => {
+    if (!comisionId) return [];
+    return delegados.filter((d) => String(d.comisionId) === String(comisionId));
+  }, [delegados, comisionId]);
+
+  const delegadosDisponiblesParaComision = useMemo(() => {
+    if (!comisionId) return [];
+    return delegados.filter((d) => {
+      const sinDesignacion = !d.designacion || d.designacion.trim() === "";
+      const enComision = String(d.comisionId) === String(comisionId);
+      const sinComision = !d.comisionId;
+      return sinDesignacion && (enComision || sinComision);
+    });
+  }, [delegados, comisionId]);
+
+  const yaAsignados = useMemo(() => comisionDelegados.filter((d) => d.designacion && d.designacion.trim() !== "").length, [comisionDelegados]);
+  const sinAsignar = delegadosDisponiblesParaComision.length;
+  const cantidadNum = Number(cantidad) || 0;
+  const maxPaises = modo === "duplas" ? Math.ceil(cantidadNum / 2) : cantidadNum;
+  const comisionSeleccionada = comisiones.find((c) => String(c.id) === String(comisionId));
+  const esCorteSeleccionada = /corte internacional de justicia|cij/i.test(comisionSeleccionada?.nombre || "");
+  const paisesRequeridos = esCorteSeleccionada ? 0 : maxPaises;
+
+  const delegadosSorted = useMemo(() => {
+    return [...delegados].sort((a, b) => {
+      const comA = a.comision || "zzz";
+      const comB = b.comision || "zzz";
+      if (comA !== comB) return comA.localeCompare(comB);
+      const aAssigned = a.designacion ? 0 : 1;
+      const bAssigned = b.designacion ? 0 : 1;
+      if (aAssigned !== bAssigned) return aAssigned - bAssigned;
+      return a.nombre.localeCompare(b.nombre);
+    });
+  }, [delegados]);
+
+  async function loadComisiones() {
+    const data = await apiRequest(`/api/eventos/${evento.id}/comisiones`);
+    setComisiones(data);
+  }
+
+  async function loadDelegados() {
     const data = await apiRequest(`/api/eventos/${evento.id}/delegados`);
     setDelegados(data.map(mapDelegado));
   }
 
+  async function load() {
+    await Promise.all([loadDelegados(), loadComisiones()]);
+  }
+
   useEffect(() => {
     load().catch((error) => window.alert(error.message));
-    const timer = window.setInterval(() => load().catch(console.error), 5000);
+    const timer = window.setInterval(() => load().catch(console.error), 30000);
     return () => window.clearInterval(timer);
   }, [evento.id]);
 
   async function upload(kind, file) {
-    if (!file) return;
+    if (!file || uploading) return;
+    setUploading(true);
     const body = new FormData();
     body.append("file", file);
     try {
       const res = await apiRequest(`/api/eventos/${evento.id}/import/${kind}`, { method: "POST", body });
       await load();
       if (res.errors && res.errors.length > 0) {
-        window.alert(`Importación completada con algunos errores:\n${res.errors.map((e) => `Fila ${e.row}: ${e.error}`).join("\n")}`);
-      } else {
-        window.alert(`¡Importación exitosa! Se cargaron ${res.imported_count} registros.`);
+        window.alert(`Importación con errores:\n${res.errors.map((e) => `Fila ${e.row}: ${e.error}`).join("\n")}`);
       }
     } catch (error) {
       window.alert(error.message);
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -358,9 +415,26 @@ function EventoDetalle({ evento, onBack }) {
   }
 
   async function updateCalificacion(id, key, value) {
-    let nextValue = value;
+    const raw = String(value ?? "").trim();
+    if (raw === "") {
+      const previous = [...delegados];
+      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "" } : d));
+      try {
+        await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: null }) });
+        await load();
+      } catch (error) {
+        setDelegados(previous);
+        window.alert(error.message);
+      }
+      return;
+    }
+    let nextValue = Number(raw);
+    if (!Number.isFinite(nextValue)) return;
     if (criterios[key]) {
-      nextValue = Math.max(0, Math.min(Number(value), criterios[key].max));
+      if (nextValue < 0 || nextValue > criterios[key].max) {
+        window.alert(`La calificación de ${criterios[key].label} debe estar entre 0 y ${criterios[key].max}.`);
+        return;
+      }
     }
     const previous = [...delegados];
     setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: nextValue } : d));
@@ -373,11 +447,11 @@ function EventoDetalle({ evento, onBack }) {
     }
   }
 
-  async function updateAvanza(id, avanza) {
+  async function updateAvanza(id, etapa) {
     const previous = [...delegados];
-    setDelegados((current) => current.map((d) => d.id === id ? { ...d, avanza } : d));
+    setDelegados((current) => current.map((d) => d.id === id ? { ...d, avanza: etapa } : d));
     try {
-      await apiRequest(`/api/eventos/${evento.id}/avanza/${id}`, { method: "PATCH", body: JSON.stringify({ avanza }) });
+      await apiRequest(`/api/eventos/${evento.id}/avanza/${id}`, { method: "PATCH", body: JSON.stringify({ avanza: etapa }) });
       await load();
     } catch (error) {
       setDelegados(previous);
@@ -386,26 +460,57 @@ function EventoDetalle({ evento, onBack }) {
   }
 
   async function asignar() {
-    try { await apiRequest(`/api/eventos/${evento.id}/asignar`, { method: "POST", body: JSON.stringify({ comision_id: Number(comisionId), modo, paises }) }); await load(); } catch (error) { window.alert(error.message); }
+    if (!comisionId) return;
+    if (!cantidadNum || cantidadNum < 1) {
+      window.alert("Ingresa la cantidad de delegados que quieres asignar a esta comisi\u00f3n.");
+      return;
+    }
+    if (cantidadNum > sinAsignar) {
+      window.alert(`Solo hay ${sinAsignar} delegado(s) sin asignar en este comité.`);
+      return;
+    }
+    if (!esCorteSeleccionada && paises.length !== paisesRequeridos) {
+      window.alert(`Selecciona exactamente ${paisesRequeridos} país(es) para asignar ${cantidadNum} delegado(s) en modo ${modo}.`);
+      return;
+    }
+    if (maxPaises > 0 && paises.length > maxPaises) {
+      window.alert(`Solo puedes seleccionar ${maxPaises} país(es) para ${cantidadNum} delegados en modo ${modo}.`);
+      return;
+    }
+    try {
+      const res = await apiRequest(`/api/eventos/${evento.id}/asignar`, {
+        method: "POST",
+        body: JSON.stringify({ comision_id: Number(comisionId), modo, paises, cantidad: cantidadNum })
+      });
+      await load();
+      setPaises([]);
+      setCantidad("");
+      setView("pase");
+      window.alert(`\u2705 ${res.assigned_count} delegado(s) asignados correctamente.`);
+    } catch (error) { window.alert(error.message); }
   }
 
   function exportEvento() {
     exportExcel(`SIGEL-${evento.nombre}.xlsx`, delegados.map((d) => ({
       Nombre: d.nombre,
-      Comision: d.comision,
-      Designacion: d.designacion,
+      Comisión: d.comision,
+      Designación: d.designacion,
       Asistencia: d.asistencia,
       Ponderada: ponderada(d).toFixed(2),
-      Avanza: d.avanza ? "Si" : "No"
+      Avanza: d.avanza ? "Sí" : "No"
     })));
   }
 
-  const allCountries = [...new Set([...PAISES, ...customCountries])].sort((a, b) => a.localeCompare(b));
+  const allCountries = useMemo(
+    () => [...new Set([...PAISES, ...customCountries])].sort((a, b) => a.localeCompare(b)),
+    [customCountries]
+  );
+
   const paisesVisibles = useMemo(() => {
     const selectedSet = new Set(paises);
     const filtered = allCountries.filter((p) => p.toLowerCase().includes(paisQuery.toLowerCase()));
     const combined = [...paises, ...filtered.filter((p) => !selectedSet.has(p))];
-    return combined.slice(0, 32);
+    return combined.slice(0, 40);
   }, [allCountries, paises, paisQuery]);
 
   async function clearDelegados() {
@@ -417,7 +522,7 @@ function EventoDetalle({ evento, onBack }) {
   }
 
   async function clearComisiones() {
-    if (!window.confirm("¿Seguro que deseas eliminar todas las comisiones (y delegados) importados de este evento?")) return;
+    if (!window.confirm("¿Seguro que deseas eliminar todas las comisiones y delegados importados de este evento?")) return;
     try {
       await apiRequest(`/api/eventos/${evento.id}/comisiones`, { method: "DELETE" });
       await load();
@@ -439,12 +544,16 @@ function EventoDetalle({ evento, onBack }) {
   function addCountry(event) {
     event.preventDefault();
     const name = customCountry.trim();
-    if (!name || allCountries.some((country) => country.toLowerCase() === name.toLowerCase())) return;
-    const next = [...customCountries, name];
-    setCustomCountries(next);
-    localStorage.setItem("sigel-paises", JSON.stringify(next));
+    if (!name) return;
+    const duplicate = allCountries.some((country) => country.toLowerCase() === name.toLowerCase());
+    if (!duplicate) {
+      const next = [...customCountries, name];
+      setCustomCountries(next);
+      localStorage.setItem("sigel-paises", JSON.stringify(next));
+    }
     setPaises((x) => x.includes(name) ? x : [...x, name]);
     setCustomCountry("");
+    setPaisQuery("");
   }
 
   return (
@@ -457,38 +566,41 @@ function EventoDetalle({ evento, onBack }) {
           <button className="btn secondary" onClick={() => window.print()}><Download size={15} /> PDF</button>
         </div>
       </div>
-      
+      <div className="event-tabs" role="tablist" aria-label="Flujo del evento">
+        {canManageEvent && <button className={view === "flujo" ? "active" : ""} onClick={() => setView("flujo")} type="button">Carga y asignación</button>}
+        {canTakeAttendance && <button className={view === "pase" ? "active" : ""} onClick={() => setView("pase")} type="button">Pase de lista</button>}
+        <button className={view === "calificaciones" ? "active" : ""} onClick={() => setView("calificaciones")} type="button">Calificaciones</button>
+      </div>
+      {view === "flujo" && canManageEvent && <>
       <div className="excel-help-card">
         <div className="excel-help-header">
           <FileSpreadsheet size={16} />
-          <h4>Reglas para Carga de Documentación Excel (Siga el orden obligatorio)</h4>
+          <h4>Formato requerido para carga Excel</h4>
         </div>
         <div className="excel-help-content">
           <div className="excel-help-col highlighted-col">
-            <h5>⚠️ PASO 1: Subir Comisiones Primero</h5>
+            <h5>Paso 1: Comisiones</h5>
             <ul>
-              <li>El archivo debe estar en formato <code>.xlsx</code>.</li>
-              <li>Columna obligatoria en la primera fila: <code>comisiones</code>.</li>
-              <li><strong>Regla de oro:</strong> Cree y suba las comisiones primero. Si no existen las comisiones en el evento, el archivo de delegados rebotará con error.</li>
+              <li>Archivo en formato <code>.xlsx</code>.</li>
+              <li>La primera fila debe incluir la columna <code>comisiones</code>.</li>
+              <li>Sube las comisiones antes del listado de delegados.</li>
             </ul>
           </div>
           <div className="excel-help-col">
-            <h5>PASO 2: Subir Delegados Después</h5>
+            <h5>Paso 2: Delegados</h5>
             <ul>
-              <li>El archivo debe estar en formato <code>.xlsx</code>.</li>
-              <li>Columna obligatoria en la primera fila: <code>nombre</code>. No se requieren más columnas obligatorias.</li>
-              <li><strong>Importante:</strong> Debe escribir el **nombre completo** del delegado en esta columna.</li>
-              <li>El sistema detectará automáticamente el primer apellido del nombre completo para realizar la asignación de Corte ("Su Excelencia [Apellido]").</li>
-              <li>No use fórmulas de Excel ni caracteres maliciosos.</li>
+              <li>Archivo en formato <code>.xlsx</code>.</li>
+              <li>La primera fila debe incluir la columna <code>nombre</code>.</li>
+              <li>Si incluyes <code>comision</code>, debe coincidir con una comisión del evento.</li>
+              <li>No se permiten fórmulas ni contenido potencialmente peligroso.</li>
             </ul>
           </div>
         </div>
       </div>
-
       <div className="event-tools">
         <div className="tool-upload-group">
           <label className="file-drop"><Upload size={18} /> Subir comisiones Excel<input type="file" accept=".xlsx" onChange={(e) => upload("comisiones", e.target.files?.[0])} /></label>
-          {comisiones.length > 0 && <button className="btn danger small-btn" onClick={clearComisiones}><Trash2 size={14} /> Limpiar Comisiones</button>}
+          {comisiones.length > 0 && <button className="btn danger small-btn" onClick={clearComisiones}><Trash2 size={14} /> Limpiar comisiones</button>}
         </div>
         <div className="tool-upload-group">
           <label className="file-drop"><FileSpreadsheet size={18} /> Subir delegados Excel<input type="file" accept=".xlsx" onChange={(e) => upload("delegados", e.target.files?.[0])} /></label>
@@ -496,49 +608,225 @@ function EventoDetalle({ evento, onBack }) {
         </div>
       </div>
       <div className="assignment-panel">
-        <div className="section-heading compact"><span>Asignaciones</span><h2>Paises por comite</h2><p>Para Corte Internacional de Justicia se asigna "Su Excelencia" y apellido, sin pais.</p></div>
-        <div className="inline-form">
-          <label>Comision<select value={comisionId} onChange={(e) => setComisionId(e.target.value)}><option value="">Seleccionar</option>{comisiones.map((c) => <option value={c.id} key={c.id}>{c.nombre}</option>)}</select></label>
-          <label>Modo<select value={modo} onChange={(e) => setModo(e.target.value)}><option value="individual">Individual</option><option value="duplas">Duplas</option></select></label>
-          <button className="btn secondary" type="button" onClick={guardarModoComision} disabled={!comisionId}>Actualizar Modo</button>
-          <label>Buscar pais<input value={paisQuery} onChange={(e) => setPaisQuery(e.target.value)} placeholder="Buscar pais" /></label>
-          <button className="btn primary" type="button" onClick={asignar} disabled={!comisionId}><CheckCircle2 size={15} /> Asignar</button>
+        <div className="section-heading compact"><span>Paso 2 - Asignaciones</span><h2>Países por comité</h2><p>Selecciona comité, modo, cantidad y países. Para Corte Internacional de Justicia se asigna "Su Excelencia" más el apellido automáticamente.</p></div>
+        <div className="assign-controls">
+          <label>
+            <span className="assign-label">Comité</span>
+            <select value={comisionId} onChange={(e) => setComisionId(e.target.value)}>
+              <option value="">Seleccionar comité</option>
+              {comisiones.map((c) => <option value={c.id} key={c.id}>{c.nombre}</option>)}
+            </select>
+          </label>
+          <label>
+            <span className="assign-label">Modo</span>
+            <select value={modo} onChange={(e) => setModo(e.target.value)}>
+              <option value="individual">Individual (1 país por delegado)</option>
+              <option value="duplas">Duplas (1 país por cada 2)</option>
+            </select>
+          </label>
+          <label>
+            <span className="assign-label">Cantidad a asignar</span>
+            <input
+              type="number"
+              min="1"
+              max={sinAsignar || undefined}
+              value={cantidad}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setCantidad(v > 0 ? v : "");
+                const newMax = modo === "duplas" ? Math.ceil(v / 2) : v;
+                if (paises.length > newMax) setPaises((x) => x.slice(0, newMax));
+              }}
+              placeholder={comisionId ? `Máx. ${sinAsignar} sin asignar` : "Selecciona comité primero"}
+              disabled={!comisionId}
+            />
+          </label>
         </div>
-        <form className="country-add" onSubmit={addCountry}><input value={customCountry} onChange={(e) => setCustomCountry(e.target.value)} placeholder="Añadir país o territorio" /><button className="btn secondary" type="submit">Añadir</button></form>
-        <div className="country-picker">{paisesVisibles.map((pais) => <button type="button" key={pais} className={paises.includes(pais) ? "active" : ""} onClick={() => setPaises((x) => x.includes(pais) ? x.filter((p) => p !== pais) : [...x, pais])}>{getFlag(pais, "picker-flag")} <span>{pais}</span></button>)}</div>
+        {comisionId && (
+          <div className="assign-counter">
+            <span className="counter-item assigned">Asignados: <strong>{yaAsignados}</strong></span>
+            <span className="counter-item pending">Sin asignar: <strong>{sinAsignar}</strong></span>
+            <span className="counter-item total">Total en comité: <strong>{comisionDelegados.length}</strong></span>
+            {delegadosDisponiblesParaComision.some((d) => !d.comisionId) && <span className="counter-item selected">Incluye delegados sin comité</span>}
+            {cantidadNum > 0 && <span className="counter-item selected">Países seleccionados: <strong>{paises.length}</strong> / <strong>{paisesRequeridos}</strong></span>}
+            {esCorteSeleccionada && <span className="counter-item done">CIJ: Su Excelencia + apellido</span>}
+          </div>
+        )}
+        <div className="country-search-row">
+          <input value={paisQuery} onChange={(e) => setPaisQuery(e.target.value)} placeholder="Buscar país" className="country-search-input" disabled={esCorteSeleccionada} />
+          <form className="country-add-inline" onSubmit={addCountry}>
+            <input value={customCountry} onChange={(e) => setCustomCountry(e.target.value)} placeholder="Añadir territorio o país" disabled={esCorteSeleccionada} />
+            <button className="btn secondary" type="submit" disabled={esCorteSeleccionada}>Añadir</button>
+          </form>
+        </div>
+        {!esCorteSeleccionada && <div className="country-picker">
+          {paisesVisibles.map((pais) => {
+            const isSelected = paises.includes(pais);
+            const limitReached = !isSelected && cantidadNum > 0 && paises.length >= maxPaises;
+            return (
+              <button
+                type="button"
+                key={pais}
+                className={isSelected ? "active" : limitReached ? "disabled" : ""}
+                disabled={limitReached}
+                title={limitReached ? `Límite de ${maxPaises} países alcanzado` : pais}
+                onClick={() => setPaises((x) => x.includes(pais) ? x.filter((p) => p !== pais) : [...x, pais])}
+              >
+                {getFlag(pais, "picker-flag")} <span>{pais}</span>
+              </button>
+            );
+          })}
+        </div>}
+        <div className="assign-action-row">
+          {paises.length > 0 && <div className="selected-summary"><strong>Seleccionados ({paises.length}):</strong> {paises.join(", ")}</div>}
+          <button className="btn primary" type="button" onClick={asignar} disabled={!comisionId || !cantidadNum || uploading}>
+            <CheckCircle2 size={15} /> Asignar {cantidadNum > 0 ? `(${cantidadNum} delegados)` : ""}
+          </button>
+        </div>
+      </div>
+      {delegados.length > 0 && (
+        <div className="global-quota-banner">
+          <span className="quota-item">Total cargados: <strong>{totalDelegados}</strong></span>
+          <span className="quota-item assigned">Con país: <strong>{totalAsignados}</strong></span>
+          {totalSinAsignar > 0 && (
+            <span className="quota-item pending">Sin asignar: <strong>{totalSinAsignar}</strong> {totalSinAsignar === 1 ? "delegado" : "delegados"} pendiente{totalSinAsignar !== 1 ? "s" : ""}</span>
+          )}
+          {totalSinAsignar === 0 && <span className="quota-item done">Todos asignados</span>}
+        </div>
+      )}
+      </>}
+
+      {view === "pase" && canTakeAttendance && <>
+      <div className="section-heading compact" style={{ marginTop: "16px" }}>
+        <span>Paso 3</span>
+        <h2>Pase de lista</h2>
+        <p>Marca la asistencia de cada delegado. Solo los presentes pasan a calificaciones.</p>
       </div>
       <div className="table-wrap">
         <table>
-          <thead><tr><th>Delegado</th><th>Comision</th><th>Asignacion</th><th>Pase de lista</th>{Object.entries(criterios).map(([k, c]) => <th key={k}>{c.label}<small>0-{c.max}</small></th>)}<th>Total</th><th>Avanza</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Delegado</th>
+              <th>Comisión</th>
+              <th>País / Asignación</th>
+              <th>Asistencia</th>
+            </tr>
+          </thead>
           <tbody>
-            {delegados.map((d) => (
+            {delegadosSorted.map((d) => (
               <tr key={d.id} className={d.asistencia === "ausente" ? "muted-row" : ""}>
                 <td><strong>{d.nombre} {d.apellido}</strong></td>
-                <td>{d.comision || "Sin comision"}</td>
+                <td><span className="comision-badge">{d.comision || <em style={{ color: "var(--muted)" }}>Sin comisi\u00f3n</em>}</span></td>
                 <td>
                   <div className="designacion-cell">
-                    {getFlag(d.designacion)}
-                    <span>{d.designacion || "Pendiente"}</span>
+                    {d.designacion
+                      ? <><span className="pais-asignado">{getFlag(d.designacion)} {d.designacion}</span></>
+                      : <em style={{ color: "var(--muted)", fontSize: "12px" }}>Pendiente de asignación</em>
+                    }
                   </div>
                 </td>
-                <td><select value={d.asistencia} onChange={(e) => updateAsistencia(d.id, e.target.value)}><option value="presente_votando">Presente/Votando</option><option value="ausente">Ausente</option></select></td>
-                {Object.keys(criterios).map((key) => <td key={key}><input className="score-input" type="number" min="0" max={criterios[key].max} value={d[key]} disabled={d.asistencia === "ausente"} onChange={(e) => updateCalificacion(d.id, key, Number(e.target.value))} /></td>)}
-                <td><strong>{d.asistencia === "ausente" ? "No aplica" : ponderada(d).toFixed(2)}</strong></td>
-                <td><input type="checkbox" checked={d.avanza} onChange={(e) => updateAvanza(d.id, e.target.checked)} /></td>
+                <td>
+                  <select
+                    value={d.asistencia}
+                    onChange={(e) => updateAsistencia(d.id, e.target.value)}
+                    className={d.asistencia === "presente_votando" ? "asistencia-presente" : "asistencia-ausente"}
+                  >
+                    <option value="presente_votando">Presente / Votando</option>
+                    <option value="ausente">Ausente</option>
+                  </select>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="helper-text">{presentes.length} presentes pasan al apartado de calificacion. Los ausentes quedan fuera del calculo operativo.</p>
+      <div className="next-step-row">
+        <p className="helper-text">{presentes.length} de {delegados.length} presentes pasan a calificaciones.</p>
+        <button className="btn primary" type="button" onClick={() => setView("calificaciones")} disabled={presentes.length === 0}>
+          <ClipboardCheck size={15} /> Siguiente
+        </button>
+      </div>
+      </>}
+
+      {view === "calificaciones" && (
+        <>
+          <div className="section-heading compact" style={{ marginTop: "28px" }}>
+            <span>Paso 4</span>
+            <h2>Calificaciones</h2>
+            <p>Evaluación de delegados presentes. Los ausentes no aparecen aquí.</p>
+          </div>
+          {presentes.length === 0 && <div className="empty-state"><ClipboardCheck size={24} /><h3>Sin delegados presentes</h3><p>Completa el pase de lista para habilitar esta hoja de evaluación.</p></div>}
+          {comisionesConPresentes.map((grupo) => (
+          <div className="table-wrap rubric-by-committee" key={grupo.id}>
+            <div className="rubric-committee-title">{grupo.nombre}</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Delegado</th>
+                  <th>Comisión</th>
+                  <th>País</th>
+                  {Object.entries(criterios).map(([k, c]) => (
+                    <th key={k}>{c.label}<small>0-{c.max}</small></th>
+                  ))}
+                  <th>Total</th>
+                  <th>Avanza</th>
+                </tr>
+              </thead>
+              <tbody>
+                {grupo.delegados.map((d) => (
+                  <tr key={d.id}>
+                    <td><strong>{d.nombre} {d.apellido}</strong></td>
+                    <td>{d.comision || "-"}</td>
+                    <td>
+                      <div className="designacion-cell">
+                        {getFlag(d.designacion)}
+                        <span>{d.designacion || "-"}</span>
+                      </div>
+                    </td>
+                    {Object.keys(criterios).map((key) => (
+                      <td key={key}>
+                        <input
+                          className="score-input"
+                          type="number"
+                          min="0"
+                          max={criterios[key].max}
+                          step="1"
+                          inputMode="numeric"
+                          placeholder=""
+                          value={d[key]}
+                          onChange={(e) => updateCalificacion(d.id, key, e.target.value)}
+                        />
+                      </td>
+                    ))}
+                    <td><strong>{ponderada(d).toFixed(2)}</strong></td>
+                    <td>
+                      <select
+                        value={d.avanza || "no"}
+                        onChange={(e) => updateAvanza(d.id, e.target.value)}
+                        className="avanza-select"
+                      >
+                        <option value="no">No avanza</option>
+                        <option value="distrital">Etapa Distrital</option>
+                        <option value="regional">Etapa Regional</option>
+                        <option value="minume">Etapa MINUME</option>
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          ))}
+        </>
+      )}
     </section>
   );
 }
 
-function UsuariosPanel({ distritos, comisiones, admins, setAdmins, onReload, onDeactivate }) {
+function UsuariosPanel({ user, distritos, comisiones, admins, setAdmins, onReload, onDeactivate }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("distrito");
+  const [role, setRole] = useState(user.role === "distrito" ? "admin" : "distrito");
   const [distritoId, setDistritoId] = useState("");
   const [comisionId, setComisionId] = useState("");
 
@@ -550,7 +838,6 @@ function UsuariosPanel({ distritos, comisiones, admins, setAdmins, onReload, onD
     const tempDistritoId = distritoId;
     const tempComisionId = comisionId;
 
-    // Reset inputs immediately
     setEmail("");
     setPassword("");
     setDistritoId("");
@@ -594,10 +881,10 @@ function UsuariosPanel({ distritos, comisiones, admins, setAdmins, onReload, onD
       <div className="section-heading compact"><span>Usuarios</span><h2>Regional, distritos y mesas</h2></div>
       <form className="inline-form" onSubmit={submit}>
         <label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
-        <label>Rol<select value={role} onChange={(e) => setRole(e.target.value)}><option value="regional">Regional</option><option value="distrito">Distrito</option><option value="admin">Mesa directiva</option></select></label>
-        <label>Distrito<select value={distritoId} onChange={(e) => setDistritoId(e.target.value)}><option value="">No aplica</option>{distritos.map((d) => <option value={d.id} key={d.id}>{d.codigo}</option>)}</select></label>
-        <label>Comisión<select value={comisionId} onChange={(e) => setComisionId(e.target.value)}><option value="">No aplica</option>{comisiones.map((c) => <option value={c.id} key={c.id}>{c.nombre}</option>)}</select></label>
-        <label>Contrasena<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} /></label>
+        <label>Rol<select value={role} onChange={(e) => setRole(e.target.value)}><option value="admin">Mesa directiva</option>{user.role === "superadmin" && <option value="regional">Regional</option>}{user.role === "superadmin" && <option value="distrito">Distrito</option>}</select></label>
+        <label>Distrito<select value={user.role === "distrito" ? user.distrito_id || "" : distritoId} onChange={(e) => setDistritoId(e.target.value)} disabled={user.role === "distrito"}><option value="">No aplica</option>{distritos.map((d) => <option value={d.id} key={d.id}>{d.codigo}</option>)}</select></label>
+        <label>Comisión<select value={comisionId} onChange={(e) => setComisionId(e.target.value)} required={role === "admin"}><option value="">No aplica</option>{comisiones.map((c) => <option value={c.id} key={c.id}>{c.nombre}{c.evento ? ` | ${c.evento.nombre}` : ""}</option>)}</select></label>
+        <label>Contraseña<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} /></label>
         <button className="btn primary"><UserPlus size={15} /> Crear</button>
       </form>
       <div className="admin-list">{admins.map((a) => <div key={a.id}><strong>{a.email}</strong><span>{a.role} | {a.distrito?.codigo || "Regional"} | {a.comision?.nombre || "Todas las comisiones"} | {a.estado}</span><button className="icon-btn danger" onClick={() => onDeactivate(a)} aria-label={`Desactivar ${a.email}`}><Trash2 size={16} /></button></div>)}</div>
@@ -625,17 +912,15 @@ function RegionalReport({ eventos }) {
 }
 
 function Dashboard({ user, onLogout }) {
-  const [active, setActive] = useState("dashboard");
+  const [active, setActive] = useState(user.role === "admin" ? "calificaciones" : "inicio");
   const [eventos, setEventos] = useState([]);
   const [distritos, setDistritos] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [comisiones, setComisiones] = useState([]);
   const [audits, setAudits] = useState([]);
   const [eventoActivo, setEventoActivo] = useState(null);
-  const [align, setAlign] = useState(() => localStorage.getItem("sigel-align") || "left");
 
   useEffect(() => { document.documentElement.dataset.theme = "light"; localStorage.removeItem("sigel-theme"); }, []);
-  useEffect(() => { document.documentElement.dataset.align = align; localStorage.setItem("sigel-align", align); }, [align]);
 
   async function loadAudits() {
     try {
@@ -650,11 +935,11 @@ function Dashboard({ user, onLogout }) {
     const [eventRows, districtRows] = await Promise.all([apiRequest("/api/eventos"), apiRequest("/api/eventos/distritos")]);
     setEventos(eventRows);
     setDistritos(districtRows);
-    if (user.role === "superadmin") {
+    if (user.role === "superadmin" || user.role === "distrito") {
       const [adminRows, commissionRows, auditRows] = await Promise.all([
         apiRequest("/api/admins"),
         apiRequest("/api/admins/comisiones"),
-        apiRequest("/api/audit").catch(() => [])
+        user.role === "superadmin" ? apiRequest("/api/audit").catch(() => []) : Promise.resolve([])
       ]);
       setAdmins(adminRows);
       setComisiones(commissionRows);
@@ -676,12 +961,13 @@ function Dashboard({ user, onLogout }) {
   }
 
   useEffect(() => {
-    let active = true;
-    const refresh = () => load().catch(console.error);
-    refresh();
-    const timer = window.setInterval(() => { if (active && !eventoActivo) refresh(); }, 5000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, [eventoActivo]);
+    let isMounted = true;
+    load().catch(console.error);
+    const timer = window.setInterval(() => {
+      if (isMounted && !eventoActivo && ["inicio", "eventos", "regional"].includes(active)) load().catch(console.error);
+    }, 30000);
+    return () => { isMounted = false; window.clearInterval(timer); };
+  }, [eventoActivo, active]);
 
   useEffect(() => {
     if (active === "seguridad" && user.role === "superadmin") {
@@ -692,35 +978,71 @@ function Dashboard({ user, onLogout }) {
   const totalDelegados = eventos.reduce((sum, e) => sum + (e._count?.delegados || 0), 0);
   const totalComisiones = eventos.reduce((sum, e) => sum + (e._count?.comisiones || 0), 0);
   const isRegional = ["superadmin", "regional"].includes(user.role);
+  const navItems = [
+    { id: "inicio", label: "Inicio", icon: BarChart3, show: user.role !== "admin" },
+    { id: "eventos", label: "Eventos", icon: FileSpreadsheet, show: user.role !== "admin" },
+    { id: "calificaciones", label: "Calificaciones", icon: ClipboardCheck, show: true },
+    { id: "agenda", label: "Agenda", icon: CalendarDays, show: user.role === "superadmin" || user.role === "distrito" },
+    { id: "regional", label: "Regional", icon: Users, show: isRegional },
+    { id: "usuarios", label: "Usuarios", icon: UserPlus, show: user.role === "superadmin" || user.role === "distrito" },
+    { id: "seguridad", label: "Seguridad", icon: ShieldCheck, show: user.role === "superadmin" }
+  ].filter((item) => item.show);
 
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <div className="brand" onClick={onLogout} style={{ cursor: "pointer" }} title="Cerrar sesión y volver al inicio">
+    <div className="app-shell admin-layout">
+      <aside className="app-sidebar">
+        <div className="brand sidebar-brand">
           <LogoMark />
-          <div><strong>SIGEL CELIDER 10</strong><span>{user.email}</span></div>
+          <div><strong>SIGEL CELIDER 10</strong><span>Regional 10</span></div>
         </div>
-        <nav className="nav-actions">
-          <button className={active === "dashboard" ? "active" : ""} onClick={() => setActive("dashboard")}>Dashboard</button>
-          <button className={active === "eventos" ? "active" : ""} onClick={() => setActive("eventos")}>Eventos</button>
-          {isRegional && <button className={active === "regional" ? "active" : ""} onClick={() => setActive("regional")}>Regional</button>}
-          {user.role === "superadmin" && <button className={active === "usuarios" ? "active" : ""} onClick={() => setActive("usuarios")}>Usuarios</button>}
-          {user.role === "superadmin" && <button className={active === "seguridad" ? "active" : ""} onClick={() => setActive("seguridad")}>Seguridad</button>}
+        <nav className="side-nav" aria-label="Panel de administración">
+          {navItems.map(({ id, label, icon: Icon }) => (
+            <button key={id} className={active === id ? "active" : ""} onClick={() => { setEventoActivo(null); setActive(id); }}>
+              <Icon size={17} /> {label}
+            </button>
+          ))}
         </nav>
-        <div className="header-actions"><button className="icon-btn" onClick={() => setAlign((value) => value === "left" ? "right" : "left")} aria-label="Cambiar alineación">{align === "left" ? <AlignRight size={16} /> : <AlignLeft size={16} />}</button><span className="role-pill">{user.role}</span><button className="icon-btn" onClick={onLogout} aria-label="Cerrar sesión"><LogOut size={17} /></button></div>
-      </header>
+        <div className="sidebar-account">
+          <span className="role-pill">{user.role}</span>
+          <strong>{user.email}</strong>
+          <button className="btn secondary full" onClick={onLogout}><LogOut size={16} /> Cerrar sesión</button>
+        </div>
+      </aside>
       <main className="workspace">
-        <section className="admin-hero"><div><span>Panel seguro</span><h1>Operacion CELIDER Regional 10</h1><p>Eventos por distrito, pase de lista, calificaciones, asignaciones y reportes exportables.</p></div></section>
-        {active === "dashboard" && <section className="metrics-grid"><Metric icon={BarChart3} label="Eventos" value={eventos.length} note="Registrados" /><Metric icon={Users} label="Delegados" value={totalDelegados} note="Cargados" /><Metric icon={FileSpreadsheet} label="Comisiones" value={totalComisiones} note="Configuradas" /><Metric icon={ShieldCheck} label="Seguridad" value="Activa" note="Acceso por roles" /></section>}
-        {active === "eventos" && (eventoActivo ? <EventoDetalle evento={eventoActivo} onBack={() => { setEventoActivo(null); load(); }} /> : <EventosPanel user={user} eventos={eventos} setEventos={setEventos} distritos={distritos} onReload={load} setEventoActivo={setEventoActivo} />)}
+        <section className="admin-hero lighthouse-hero">
+          <div><span>Bienvenido</span><h1>Bienvenido al panel institucional CELIDER Regional 10</h1><p>Gestiona eventos, carga listados, asigna países, verifica asistencia y consulta auditoría desde un entorno protegido por roles.</p></div>
+        </section>
+        {active === "inicio" && <section className="metrics-grid"><Metric icon={BarChart3} label="Eventos" value={eventos.length} note="Registrados" /><Metric icon={Users} label="Delegados" value={totalDelegados} note="Cargados" /><Metric icon={FileSpreadsheet} label="Comisiones" value={totalComisiones} note="Configuradas" /><Metric icon={ShieldCheck} label="Seguridad" value="Activa" note="Acceso por roles" /></section>}
+        {active === "eventos" && (eventoActivo ? <EventoDetalle user={user} evento={eventoActivo} onBack={() => { setEventoActivo(null); load(); }} /> : <EventosPanel user={user} eventos={eventos} setEventos={setEventos} distritos={distritos} onReload={load} setEventoActivo={setEventoActivo} />)}
+        {active === "calificaciones" && (eventoActivo ? <EventoDetalle user={user} evento={eventoActivo} initialView="calificaciones" onBack={() => { setEventoActivo(null); load(); }} /> : <EventosPanel user={user} eventos={eventos} setEventos={setEventos} distritos={distritos} onReload={load} setEventoActivo={setEventoActivo} />)}
+        {active === "agenda" && <AgendaPanel eventos={eventos} />}
         {active === "regional" && <RegionalReport eventos={eventos} />}
-        {active === "usuarios" && <UsuariosPanel distritos={distritos} comisiones={comisiones} admins={admins} setAdmins={setAdmins} onReload={load} onDeactivate={deactivateAdmin} />}
+        {active === "usuarios" && <UsuariosPanel user={user} distritos={distritos} comisiones={comisiones} admins={admins} setAdmins={setAdmins} onReload={load} onDeactivate={deactivateAdmin} />}
         {active === "seguridad" && user.role === "superadmin" && <SeguridadPanel audits={audits} onRefresh={loadAudits} />}
       </main>
     </div>
   );
 }
 
+function AgendaPanel({ eventos }) {
+  const rows = [...eventos].sort((a, b) => new Date(a.fecha || 0) - new Date(b.fecha || 0));
+  return (
+    <article className="activity-card">
+      <div className="table-title">
+        <div><span>Agenda</span><h2>Calendario operativo</h2></div>
+      </div>
+      <div className="agenda-list">
+        {rows.length === 0 && <div className="empty-state"><CalendarDays size={24} /><h3>Sin eventos programados</h3><p>Los eventos creados aparecerán en esta agenda.</p></div>}
+        {rows.map((evento) => (
+          <article key={evento.id}>
+            <time>{evento.fecha ? new Date(evento.fecha).toLocaleDateString("es-DO") : "Sin fecha"}</time>
+            <div><strong>{evento.nombre}</strong><span>{evento.distrito?.codigo || "Regional"} | {evento._count?.delegados || 0} delegados | {evento._count?.comisiones || 0} comisiones</span></div>
+          </article>
+        ))}
+      </div>
+    </article>
+  );
+}
 function SeguridadPanel({ audits, onRefresh }) {
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -735,7 +1057,7 @@ function SeguridadPanel({ audits, onRefresh }) {
       <div className="table-title">
         <div>
           <span>Ciberseguridad y Monitoreo</span>
-          <h2>Bitácora de Auditoría y Detección de Incidentes</h2>
+          <h2>Bitácora de auditoría y detección de incidentes</h2>
         </div>
         <div className="table-actions">
           <input
@@ -753,7 +1075,7 @@ function SeguridadPanel({ audits, onRefresh }) {
       <div className="security-alert-banner">
         <ShieldCheck size={18} />
         <div>
-          <strong>Protección en Tiempo Real Activa:</strong> El sistema audita todos los accesos, inyecciones de código e intentos de intrusión. Las fórmulas de Excel y las inyecciones SQL son interceptadas y registradas para resguardar la seguridad de la Regional 10.
+          <strong>Protección activa:</strong> El sistema audita todos los accesos, inyecciones de código e intentos de intrusión. Las fórmulas de Excel y las inyecciones SQL son interceptadas y registradas para resguardar la seguridad de la Regional 10.
         </div>
       </div>
 
@@ -764,7 +1086,7 @@ function SeguridadPanel({ audits, onRefresh }) {
               <th>Fecha y Hora</th>
               <th>Usuario</th>
               <th>Rol</th>
-              <th>Acción Realizada</th>
+              <th>Acción realizada</th>
               <th>Entidad</th>
               <th>ID</th>
               <th>Detalles / Metadatos</th>
@@ -833,3 +1155,9 @@ function App() {
 }
 
 createRoot(document.getElementById("root")).render(<App />);
+
+
+
+
+
+

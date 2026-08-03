@@ -37,6 +37,27 @@ async function main() {
     }
   });
 
+  const testEmail = process.env.LOCAL_TEST_EMAIL || "prueba@celider10.local";
+  const testPassword = process.env.LOCAL_TEST_PASSWORD || "PruebaLocal123";
+  const testHash = await bcrypt.hash(testPassword, Number(process.env.BCRYPT_ROUNDS || 10));
+  const distrito = await prisma.distrito.findUnique({ where: { codigo: "10-01" } });
+  await prisma.user.upsert({
+    where: { email: testEmail },
+    update: {
+      passwordHash: testHash,
+      role: "distrito",
+      distritoId: distrito?.id || null,
+      estado: "activo",
+      deletedAt: null
+    },
+    create: {
+      email: testEmail,
+      passwordHash: testHash,
+      role: "distrito",
+      distritoId: distrito?.id || null
+    }
+  });
+
   await prisma.config.upsert({
     where: { key: "publish_status" },
     update: {},
@@ -46,6 +67,8 @@ async function main() {
   console.log("Seed completado");
   console.log(`Email: ${email}`);
   console.log(`Password temporal: ${password}`);
+  console.log(`Usuario local: ${testEmail}`);
+  console.log(`Password local: ${testPassword}`);
 }
 
 main()

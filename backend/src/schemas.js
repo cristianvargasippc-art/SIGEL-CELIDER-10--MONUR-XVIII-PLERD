@@ -7,11 +7,11 @@ export const loginSchema = z.object({
 
 export const calificacionSchema = z.object({
   delegado_id: z.number().int().positive(),
-  oratoria: z.number().int().min(0).max(15).optional(),
-  argumentacion: z.number().int().min(0).max(25).optional(),
-  negociacion: z.number().int().min(0).max(20).optional(),
-  liderazgo: z.number().int().min(0).max(15).optional(),
-  redaccion: z.number().int().min(0).max(25).optional(),
+  oratoria: z.number().int().min(0).max(15).nullable().optional(),
+  argumentacion: z.number().int().min(0).max(25).nullable().optional(),
+  negociacion: z.number().int().min(0).max(20).nullable().optional(),
+  liderazgo: z.number().int().min(0).max(15).nullable().optional(),
+  redaccion: z.number().int().min(0).max(25).nullable().optional(),
   presente_estado: z.enum(["presente_votando", "ausente"]).optional(),
   pasa_minume_xvii: z.boolean().optional(),
   mencion: z.string().max(500).optional(),
