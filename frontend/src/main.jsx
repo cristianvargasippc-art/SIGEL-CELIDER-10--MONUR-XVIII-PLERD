@@ -14,7 +14,8 @@ import {
   Upload,
   UserPlus,
   Users,
-  ClipboardCheck
+  ClipboardCheck,
+  Search
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import "./styles.css";
@@ -298,6 +299,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
   const [customCountries, setCustomCountries] = useState(() => JSON.parse(localStorage.getItem("sigel-paises") || "[]"));
   const [uploading, setUploading] = useState(false);
   const [view, setView] = useState(initialView);
+  const [filtroCalificaciones, setFiltroCalificaciones] = useState("");
   const canManageEvent = ["superadmin", "distrito"].includes(user?.role);
   const canTakeAttendance = canManageEvent;
 
@@ -311,13 +313,23 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
   }, [comisionId]);
 
   const presentes = delegados.filter((d) => d.asistencia === "presente_votando");
+  const presentesFiltrados = useMemo(() => {
+    if (!filtroCalificaciones.trim()) return presentes;
+    const search = filtroCalificaciones.toLowerCase().trim();
+    return presentes.filter((d) => {
+      const fullNombre = `${d.nombre} ${d.apellido || ""}`.toLowerCase();
+      const pais = (d.designacion || "").toLowerCase();
+      return fullNombre.includes(search) || pais.includes(search);
+    });
+  }, [presentes, filtroCalificaciones]);
+
   const presentesOrdenados = useMemo(() => {
-    return [...presentes].sort((a, b) => {
+    return [...presentesFiltrados].sort((a, b) => {
       const comisionCompare = (a.comision || "").localeCompare(b.comision || "");
       if (comisionCompare) return comisionCompare;
       return `${a.nombre} ${a.apellido}`.localeCompare(`${b.nombre} ${b.apellido}`);
     });
-  }, [presentes]);
+  }, [presentesFiltrados]);
   const comisionesConPresentes = useMemo(() => {
     const map = new Map();
     presentesOrdenados.forEach((delegado) => {
@@ -490,13 +502,26 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
   }
 
   function exportEvento() {
+    const avanzaLabels = {
+      no: "No avanza",
+      distrital: "Etapa Distrital",
+      regional: "Etapa Regional",
+      minume: "Etapa MINUME"
+    };
+
     exportExcel(`SIGEL-${evento.nombre}.xlsx`, delegados.map((d) => ({
       Nombre: d.nombre,
+      Apellido: d.apellido || "",
       Comisión: d.comision,
-      Designación: d.designacion,
-      Asistencia: d.asistencia,
-      Ponderada: ponderada(d).toFixed(2),
-      Avanza: d.avanza ? "Sí" : "No"
+      "País / Designación": d.designacion || "",
+      Asistencia: d.asistencia === "presente_votando" ? "Presente" : "Ausente",
+      Oratoria: d.oratoria !== "" && d.oratoria !== null && d.oratoria !== undefined ? Number(d.oratoria) : "",
+      Argumentación: d.argumentacion !== "" && d.argumentacion !== null && d.argumentacion !== undefined ? Number(d.argumentacion) : "",
+      Negociación: d.negociacion !== "" && d.negociacion !== null && d.negociacion !== undefined ? Number(d.negociacion) : "",
+      Liderazgo: d.liderazgo !== "" && d.liderazgo !== null && d.liderazgo !== undefined ? Number(d.liderazgo) : "",
+      Redacción: d.redaccion !== "" && d.redaccion !== null && d.redaccion !== undefined ? Number(d.redaccion) : "",
+      "Total Ponderado": d.asistencia === "presente_votando" ? Number(ponderada(d).toFixed(2)) : "",
+      Avanza: avanzaLabels[d.avanza] || "No avanza"
     })));
   }
 
@@ -754,6 +779,31 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
             <h2>Calificaciones</h2>
             <p>Evaluación de delegados presentes. Los ausentes no aparecen aquí.</p>
           </div>
+
+          {presentes.length > 0 && (
+            <div className="calificaciones-search-box" style={{ position: "relative", marginBottom: "20px", maxWidth: "360px" }}>
+              <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "rgba(0, 0, 0, 0.4)", display: "flex", alignItems: "center", pointerEvents: "none" }}>
+                <Search size={16} />
+              </span>
+              <input
+                type="text"
+                placeholder="Buscar por nombre o país..."
+                value={filtroCalificaciones}
+                onChange={(e) => setFiltroCalificaciones(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px 8px 36px",
+                  minHeight: "40px",
+                  borderRadius: "8px",
+                  border: "1.5px solid var(--line)",
+                  fontSize: "14px",
+                  background: "#fff",
+                  boxSizing: "border-box"
+                }}
+              />
+            </div>
+          )}
+
           {presentes.length === 0 && <div className="empty-state"><ClipboardCheck size={24} /><h3>Sin delegados presentes</h3><p>Completa el pase de lista para habilitar esta hoja de evaluación.</p></div>}
           {comisionesConPresentes.map((grupo) => (
           <div className="table-wrap rubric-by-committee" key={grupo.id}>
