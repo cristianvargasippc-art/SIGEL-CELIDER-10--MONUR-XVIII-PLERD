@@ -864,6 +864,13 @@ td strong {
 .score-input {
   width: 70px;
   padding-inline: 8px;
+  -moz-appearance: textfield;
+}
+
+.score-input::-webkit-outer-spin-button,
+.score-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .level {

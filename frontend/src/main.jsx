@@ -15,7 +15,8 @@ import {
   UserPlus,
   Users,
   ClipboardCheck,
-  Search
+  Search,
+  RefreshCw
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import "./styles.css";
@@ -112,6 +113,17 @@ function exportExcel(filename, rows) {
   const book = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(book, sheet, "Reporte");
   XLSX.writeFile(book, filename);
+}
+
+function displayError(error) {
+  if (!error) return;
+  const msg = error.message || String(error);
+  const silentErrors = ["token requerido", "token invalido o expirado", "refresh token requerido", "sesion invalida"];
+  if (silentErrors.includes(msg.toLowerCase().trim())) {
+    console.warn("Silent API error ignored:", msg);
+    return;
+  }
+  window.alert(msg);
 }
 
 function LogoMark({ onClick }) {
@@ -235,7 +247,7 @@ function EventosPanel({ user, eventos, setEventos, distritos, onReload, setEvent
       setEventos((current) => current.filter((e) => e.id !== tempEvent.id));
       setNombre(tempNombre);
       setFecha(tempFecha);
-      window.alert(error.message);
+      displayError(error);
     }
   }
 
@@ -248,7 +260,7 @@ function EventosPanel({ user, eventos, setEventos, distritos, onReload, setEvent
       await onReload();
     } catch (error) {
       setEventos(previous);
-      window.alert(error.message);
+      displayError(error);
     }
   }
 
@@ -394,7 +406,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
   }
 
   useEffect(() => {
-    load().catch((error) => window.alert(error.message));
+    load().catch(displayError);
     const timer = window.setInterval(() => load().catch(console.error), 30000);
     return () => window.clearInterval(timer);
   }, [evento.id]);
@@ -408,10 +420,12 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
       const res = await apiRequest(`/api/eventos/${evento.id}/import/${kind}`, { method: "POST", body });
       await load();
       if (res.errors && res.errors.length > 0) {
-        window.alert(`Importación con errores:\n${res.errors.map((e) => `Fila ${e.row}: ${e.error}`).join("\n")}`);
+        displayError(new Error(`Importación con errores:\n${res.errors.map((e) => `Fila ${e.row}: ${e.error}`).join("\n")}`));
+      } else {
+        window.alert("Listado cargado correctamente.");
       }
     } catch (error) {
-      window.alert(error.message);
+      displayError(error);
     } finally {
       setUploading(false);
     }
@@ -424,7 +438,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
       await apiRequest(`/api/eventos/${evento.id}/asistencia/${id}`, { method: "PATCH", body: JSON.stringify({ estado }) });
     } catch (error) {
       setDelegados(previous);
-      window.alert(error.message);
+      displayError(error);
     }
   }
 
@@ -437,12 +451,16 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
         await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: null }) });
       } catch (error) {
         setDelegados(previous);
-        window.alert(error.message);
+        displayError(error);
       }
       return;
     }
     let nextValue = Number(raw);
     if (!Number.isFinite(nextValue)) return;
+    if (!Number.isInteger(nextValue)) {
+      window.alert("Solo se permiten cantidades enteras (sin decimales).");
+      return;
+    }
     if (criterios[key]) {
       if (nextValue < 0 || nextValue > criterios[key].max) {
         window.alert(`La calificación de ${criterios[key].label} debe estar entre 0 y ${criterios[key].max}.`);
@@ -455,7 +473,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
       await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: nextValue }) });
     } catch (error) {
       setDelegados(previous);
-      window.alert(error.message);
+      displayError(error);
     }
   }
 
@@ -498,7 +516,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
       setCantidad("");
       setView("pase");
       window.alert(`\u2705 ${res.assigned_count} delegado(s) asignados correctamente.`);
-    } catch (error) { window.alert(error.message); }
+    } catch (error) { displayError(error); }
   }
 
   function exportEvento() {
@@ -542,27 +560,26 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     try {
       await apiRequest(`/api/eventos/${evento.id}/delegados`, { method: "DELETE" });
       await load();
-    } catch (error) { window.alert(error.message); }
+    } catch (error) { displayError(error); }
   }
 
   async function clearComisiones() {
-    if (!window.confirm("¿Seguro que deseas eliminar todas las comisiones y delegados importados de este evento?")) return;
+    if (!confirm("Atención: esto eliminará TODAS las comisiones de este evento. ¿Deseas continuar?")) return;
     try {
       await apiRequest(`/api/eventos/${evento.id}/comisiones`, { method: "DELETE" });
       await load();
-    } catch (error) { window.alert(error.message); }
+    } catch (error) { displayError(error); }
   }
 
-  async function guardarModoComision() {
-    if (!comisionId) return;
+  async function updateModoAsignacion(comisionId, modo) {
     try {
       await apiRequest(`/api/eventos/${evento.id}/comisiones/${comisionId}`, {
         method: "PATCH",
-        body: JSON.stringify({ modo })
+        body: JSON.stringify({ modoAsignacion: modo })
       });
       await load();
       window.alert("Modo de asignación de la comisión guardado correctamente.");
-    } catch (error) { window.alert(error.message); }
+    } catch (error) { displayError(error); }
   }
 
   function addCountry(event) {
@@ -777,30 +794,42 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
           <div className="section-heading compact" style={{ marginTop: "28px" }}>
             <span>Paso 4</span>
             <h2>Calificaciones</h2>
-            <p>Evaluación de delegados presentes. Los ausentes no aparecen aquí.</p>
+            <p>Evaluación de delegados presentes. Los ausentes no aparecen aquí. <strong>* Nota: Solo se permiten cantidades enteras (sin decimales).</strong></p>
           </div>
 
           {presentes.length > 0 && (
-            <div className="calificaciones-search-box" style={{ position: "relative", marginBottom: "20px", maxWidth: "360px" }}>
-              <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "rgba(0, 0, 0, 0.4)", display: "flex", alignItems: "center", pointerEvents: "none" }}>
-                <Search size={16} />
-              </span>
-              <input
-                type="text"
-                placeholder="Buscar por nombre o país..."
-                value={filtroCalificaciones}
-                onChange={(e) => setFiltroCalificaciones(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "8px 12px 8px 36px",
-                  minHeight: "40px",
-                  borderRadius: "8px",
-                  border: "1.5px solid var(--line)",
-                  fontSize: "14px",
-                  background: "#fff",
-                  boxSizing: "border-box"
+            <div style={{ display: "flex", gap: "12px", alignItems: "center", marginBottom: "20px", flexWrap: "wrap" }}>
+              <div className="calificaciones-search-box" style={{ position: "relative", maxWidth: "360px", flex: "1" }}>
+                <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "rgba(0, 0, 0, 0.4)", display: "flex", alignItems: "center", pointerEvents: "none" }}>
+                  <Search size={16} />
+                </span>
+                <input
+                  type="text"
+                  placeholder="Buscar por nombre o país..."
+                  value={filtroCalificaciones}
+                  onChange={(e) => setFiltroCalificaciones(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px 8px 36px",
+                    minHeight: "40px",
+                    borderRadius: "8px",
+                    border: "1.5px solid var(--line)",
+                    fontSize: "14px",
+                    background: "#fff",
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={async () => {
+                  await load();
                 }}
-              />
+                style={{ height: "40px", display: "flex", alignItems: "center", gap: "8px" }}
+              >
+                <RefreshCw size={15} /> Actualizar Calificaciones
+              </button>
             </div>
           )}
 
@@ -921,7 +950,7 @@ function UsuariosPanel({ user, distritos, comisiones, admins, setAdmins, onReloa
       setPassword(tempPassword);
       setDistritoId(tempDistritoId);
       setComisionId(tempComisionId);
-      window.alert(error.message);
+      displayError(error);
     }
   }
 
@@ -1017,7 +1046,7 @@ function Dashboard({ user, onLogout }) {
       await load();
     } catch (error) {
       setAdmins(previous);
-      window.alert(error.message);
+      displayError(error);
     }
   }
 
