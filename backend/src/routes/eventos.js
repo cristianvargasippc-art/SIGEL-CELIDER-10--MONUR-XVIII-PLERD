@@ -102,30 +102,33 @@ eventosRouter.delete("/:eventoId", verifyToken, authorize("superadmin", "distrit
     });
     const comisionIds = comisiones.map((c) => c.id);
 
-    await prisma.$transaction([
-      prisma.user.updateMany({
-        where: { comisionId: { in: comisionIds } },
-        data: { comisionId: null }
-      }),
-      prisma.calificacion.deleteMany({
-        where: { delegadoId: { in: delegadoIds } }
-      }),
-      prisma.delegado.deleteMany({
-        where: { eventoId }
-      }),
-      prisma.comision.deleteMany({
-        where: { eventoId }
-      }),
-      prisma.evento.delete({
-        where: { id: eventoId }
-      })
-    ]);
+    const transactionSteps = [];
+    if (comisionIds.length > 0) {
+      transactionSteps.push(
+        prisma.user.updateMany({
+          where: { comisionId: { in: comisionIds } },
+          data: { comisionId: null }
+        })
+      );
+    }
+    if (delegadoIds.length > 0) {
+      transactionSteps.push(
+        prisma.calificacion.deleteMany({
+          where: { delegadoId: { in: delegadoIds } }
+        })
+      );
+    }
+    transactionSteps.push(prisma.delegado.deleteMany({ where: { eventoId } }));
+    transactionSteps.push(prisma.comision.deleteMany({ where: { eventoId } }));
+    transactionSteps.push(prisma.evento.delete({ where: { id: eventoId } }));
+
+    await prisma.$transaction(transactionSteps);
 
     await prisma.audit.create({ data: { userId: req.user.id, action: "evento_eliminado", entityType: "evento", entityId: eventoId } });
     return res.json({ success: true });
   } catch (error) {
     console.error("Error deleting event:", error);
-    return res.status(500).json({ error: "No se pudo eliminar el evento debido a dependencias activas." });
+    return res.status(400).json({ error: error.message || "No se pudo eliminar el evento." });
   }
 });
 
@@ -343,15 +346,20 @@ eventosRouter.delete("/:eventoId/delegados", verifyToken, authorize("superadmin"
     const delegados = await prisma.delegado.findMany({ where: { eventoId }, select: { id: true } });
     const delegadoIds = delegados.map((d) => d.id);
 
-    await prisma.$transaction([
-      prisma.calificacion.deleteMany({ where: { delegadoId: { in: delegadoIds } } }),
-      prisma.delegado.deleteMany({ where: { eventoId } })
-    ]);
+    const transactionSteps = [];
+    if (delegadoIds.length > 0) {
+      transactionSteps.push(
+        prisma.calificacion.deleteMany({ where: { delegadoId: { in: delegadoIds } } })
+      );
+    }
+    transactionSteps.push(prisma.delegado.deleteMany({ where: { eventoId } }));
+
+    await prisma.$transaction(transactionSteps);
 
     await prisma.audit.create({ data: { userId: req.user.id, action: "excel_delegados_limpiados", entityType: "evento", entityId: eventoId } });
     return res.json({ success: true });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(400).json({ error: error.message || "No se pudo limpiar los delegados." });
   }
 });
 
@@ -366,17 +374,26 @@ eventosRouter.delete("/:eventoId/comisiones", verifyToken, authorize("superadmin
     const comisiones = await prisma.comision.findMany({ where: { eventoId }, select: { id: true } });
     const comisionIds = comisiones.map((c) => c.id);
 
-    await prisma.$transaction([
-      prisma.user.updateMany({ where: { comisionId: { in: comisionIds } }, data: { comisionId: null } }),
-      prisma.calificacion.deleteMany({ where: { delegadoId: { in: delegadoIds } } }),
-      prisma.delegado.deleteMany({ where: { eventoId } }),
-      prisma.comision.deleteMany({ where: { eventoId } })
-    ]);
+    const transactionSteps = [];
+    if (comisionIds.length > 0) {
+      transactionSteps.push(
+        prisma.user.updateMany({ where: { comisionId: { in: comisionIds } }, data: { comisionId: null } })
+      );
+    }
+    if (delegadoIds.length > 0) {
+      transactionSteps.push(
+        prisma.calificacion.deleteMany({ where: { delegadoId: { in: delegadoIds } } })
+      );
+    }
+    transactionSteps.push(prisma.delegado.deleteMany({ where: { eventoId } }));
+    transactionSteps.push(prisma.comision.deleteMany({ where: { eventoId } }));
+
+    await prisma.$transaction(transactionSteps);
 
     await prisma.audit.create({ data: { userId: req.user.id, action: "excel_comisiones_limpiadas", entityType: "evento", entityId: eventoId } });
     return res.json({ success: true });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(400).json({ error: error.message || "No se pudo limpiar las comisiones." });
   }
 });
 
