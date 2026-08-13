@@ -33,7 +33,15 @@ async function findDelegadoInEvent(eventoId, delegadoId) {
   return prisma.delegado.findFirst({ where: { id: delegadoId, eventoId } });
 }
 
+let districtsEnsured = false;
+
 export async function ensureDistricts() {
+  if (districtsEnsured) return;
+  const count = await prisma.distrito.count();
+  if (count >= DISTRITOS.length) {
+    districtsEnsured = true;
+    return;
+  }
   for (const codigo of DISTRITOS) {
     await prisma.distrito.upsert({
       where: { codigo },
@@ -41,6 +49,7 @@ export async function ensureDistricts() {
       create: { codigo, nombre: `Distrito ${codigo}` }
     });
   }
+  districtsEnsured = true;
 }
 
 eventosRouter.get("/distritos", verifyToken, authorize("superadmin", "regional", "distrito", "admin"), async (_req, res) => {

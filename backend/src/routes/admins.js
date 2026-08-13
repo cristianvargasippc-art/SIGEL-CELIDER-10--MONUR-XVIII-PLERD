@@ -93,7 +93,16 @@ adminsRouter.post("/", verifyToken, authorize("superadmin", "distrito"), validat
       changes: { email: admin.email, role, distrito_id: admin.distritoId, comision_id: admin.comisionId, password_definida: Boolean(req.body.password) }
     }
   });
-  return res.status(existing ? 200 : 201).json({ id: admin.id, email: admin.email, password_temp: password });
+
+  const fullAdmin = await prisma.user.findUnique({
+    where: { id: admin.id },
+    include: { comision: true, distrito: true }
+  });
+
+  return res.status(existing ? 200 : 201).json({
+    ...fullAdmin,
+    password_temp: password
+  });
 });
 
 

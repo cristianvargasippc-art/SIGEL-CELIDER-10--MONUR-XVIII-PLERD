@@ -215,19 +215,21 @@ function EventosPanel({ user, eventos, setEventos, distritos, onReload, setEvent
 
   async function createEvento(event) {
     event.preventDefault();
-    const tempNombre = nombre;
+    const tempNombre = nombre.trim();
+    if (!tempNombre) return;
     const tempFecha = fecha;
-    const tempDistritoId = distritoId;
+    const resolvedDistritoId = user.role === "distrito" ? user.distrito_id : (distritoId ? Number(distritoId) : null);
+    const targetDistrito = distritos.find((d) => d.id === resolvedDistritoId) || (user.distrito ? { id: resolvedDistritoId, codigo: user.distrito } : null);
 
-    // Reset inputs immediately
     setNombre("");
     setFecha("");
+    if (user.role !== "distrito") setDistritoId("");
 
     const tempEvent = {
       id: "temp-" + Date.now(),
       nombre: tempNombre,
       fecha: tempFecha || null,
-      distrito: distritos.find((d) => d.id === Number(tempDistritoId)) || null,
+      distrito: targetDistrito,
       _count: { delegados: 0, comisiones: 0 }
     };
 
@@ -239,11 +241,12 @@ function EventosPanel({ user, eventos, setEventos, distritos, onReload, setEvent
         body: JSON.stringify({
           nombre: tempNombre,
           fecha: tempFecha || undefined,
-          distrito_id: tempDistritoId ? Number(tempDistritoId) : undefined
+          distrito_id: resolvedDistritoId || undefined
         })
       });
       const realEvent = {
         ...res,
+        distrito: res.distrito || tempEvent.distrito,
         _count: res._count || { delegados: 0, comisiones: 0 }
       };
       setEventos((current) => current.map((e) => e.id === tempEvent.id ? realEvent : e));
@@ -913,23 +916,26 @@ function UsuariosPanel({ user, distritos, comisiones, admins, setAdmins, onReloa
 
   async function submit(event) {
     event.preventDefault();
-    const tempEmail = email;
+    const tempEmail = email.trim();
+    if (!tempEmail) return;
     const tempPassword = password;
     const tempRole = role;
-    const tempDistritoId = distritoId;
+    const resolvedDistritoId = user.role === "distrito" ? user.distrito_id : (distritoId ? Number(distritoId) : null);
+    const targetDistrito = distritos.find((d) => d.id === resolvedDistritoId) || (user.distrito ? { id: resolvedDistritoId, codigo: user.distrito } : null);
     const tempComisionId = comisionId;
+    const targetComision = comisiones.find((c) => c.id === Number(tempComisionId)) || null;
 
     setEmail("");
     setPassword("");
-    setDistritoId("");
+    if (user.role !== "distrito") setDistritoId("");
     setComisionId("");
 
     const tempAdmin = {
       id: "temp-" + Date.now(),
       email: tempEmail,
       role: tempRole,
-      distrito: distritos.find((d) => d.id === Number(tempDistritoId)) || null,
-      comision: comisiones.find((c) => c.id === Number(tempComisionId)) || null,
+      distrito: targetDistrito,
+      comision: targetComision,
       estado: "activo"
     };
 
@@ -942,21 +948,22 @@ function UsuariosPanel({ user, distritos, comisiones, admins, setAdmins, onReloa
           email: tempEmail,
           password: tempPassword || undefined,
           role: tempRole,
-          distrito_id: tempDistritoId ? Number(tempDistritoId) : undefined,
+          distrito_id: resolvedDistritoId || undefined,
           comision_id: tempComisionId ? Number(tempComisionId) : undefined
         })
       });
       const realAdmin = {
-        ...tempAdmin,
-        id: res.id,
-        email: res.email
+        ...res,
+        distrito: res.distrito || tempAdmin.distrito,
+        comision: res.comision || tempAdmin.comision,
+        estado: res.estado || "activo"
       };
       setAdmins((current) => current.map((a) => a.id === tempAdmin.id ? realAdmin : a));
     } catch (error) {
       setAdmins((current) => current.filter((a) => a.id !== tempAdmin.id));
       setEmail(tempEmail);
       setPassword(tempPassword);
-      setDistritoId(tempDistritoId);
+      if (user.role !== "distrito") setDistritoId(distritoId);
       setComisionId(tempComisionId);
       displayError(error);
     }
