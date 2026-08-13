@@ -105,7 +105,11 @@ app.use("/api", (_req, res) => res.status(404).json({ error: "Ruta API no encont
 
 function getCandidateFrontendPaths() {
   const paths = [];
-  const bases = [__dirname, process.cwd()];
+  if (process.env.FRONTEND_DIST) paths.push(process.env.FRONTEND_DIST);
+  if (process.env.PUBLIC_DIR) paths.push(process.env.PUBLIC_DIR);
+  if (process.env.STATIC_PATH) paths.push(process.env.STATIC_PATH);
+
+  const bases = [__dirname, process.cwd(), join(__dirname, ".."), join(process.cwd(), "..")];
   
   for (const base of bases) {
     if (!base) continue;
@@ -113,8 +117,14 @@ function getCandidateFrontendPaths() {
     for (let i = 0; i < 5; i++) {
       paths.push(join(curr, "frontend/dist"));
       paths.push(join(curr, "dist"));
+      paths.push(join(curr, "public"));
+      paths.push(join(curr, "public_html"));
       paths.push(join(curr, "public_html/frontend/dist"));
       paths.push(join(curr, "public_html/dist"));
+      paths.push(join(curr, "backend/dist"));
+      paths.push(join(curr, "backend/public"));
+      paths.push(join(curr, "src/dist"));
+      paths.push(join(curr, "src/public"));
       const parent = join(curr, "..");
       if (parent === curr) break;
       curr = parent;
@@ -130,7 +140,7 @@ function resolveFrontendPath() {
       return p;
     }
   }
-  return candidates[0];
+  return candidates[0] || join(__dirname, "../dist");
 }
 
 const candidatePaths = getCandidateFrontendPaths();
@@ -149,11 +159,37 @@ app.get("*", (_req, res) => {
   if (existsSync(indexPath)) {
     return res.sendFile(indexPath);
   }
-  return res.status(404).json({
-    error: "Archivo index.html no encontrado en el servidor",
-    path_checked: indexPath,
-    candidates_searched: candidatePaths
-  });
+  return res.status(404).type("html").send(`
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>SIGEL CELIDER 10 - Sistema Activo</title>
+      <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 1rem; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 2rem; max-width: 650px; width: 100%; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); }
+        h1 { color: #38bdf8; margin-top: 0; font-size: 1.5rem; }
+        p { line-height: 1.6; color: #94a3b8; }
+        code { background: #0f172a; color: #f43f5e; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.85em; word-break: break-all; }
+        .status { display: inline-block; background: #0369a1; color: #e0f2fe; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.85rem; font-weight: 600; margin-bottom: 1rem; }
+        .help { background: #0f172a; padding: 1rem; border-radius: 8px; border-left: 4px solid #38bdf8; margin-top: 1rem; font-size: 0.85rem; max-height: 200px; overflow-y: auto; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <span class="status">Backend Activo (API OK)</span>
+        <h1>SIGEL CELIDER 10 - Servidor En Ejecución</h1>
+        <p>El servicio API del Backend está funcionando correctamente. Para visualizar la interfaz de usuario, se requiere compilar el frontend ejecutando:</p>
+        <p><code>npm run build</code></p>
+        <div class="help">
+          <strong>Rutas escaneadas para index.html:</strong><br>
+          ${candidatePaths.map(p => `• <code>${p}</code>`).join('<br>')}
+        </div>
+      </div>
+    </body>
+    </html>
+  `);
 });
 
 app.use((err, _req, res, _next) => {
