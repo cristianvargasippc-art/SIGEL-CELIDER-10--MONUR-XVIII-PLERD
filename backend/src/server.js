@@ -112,7 +112,8 @@ app.use((err, _req, res, _next) => {
   logger.error("Unhandled error", { error: err.message, stack: err.stack });
   return res.status(500).json({
     error: "Error interno del servidor",
-    ...(process.env.NODE_ENV !== "production" ? { detail: err.message, code: err.code || null } : {})
+    detail: err.message,
+    code: err.code || null
   });
 });
 

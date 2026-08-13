@@ -402,7 +402,8 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
   }
 
   async function load() {
-    await Promise.all([loadDelegados(), loadComisiones()]);
+    await loadDelegados();
+    await loadComisiones();
   }
 
   useEffect(() => {
@@ -1022,18 +1023,23 @@ function Dashboard({ user, onLogout }) {
   }
 
   async function load() {
-    const [eventRows, districtRows] = await Promise.all([apiRequest("/api/eventos"), apiRequest("/api/eventos/distritos")]);
-    setEventos(eventRows);
-    setDistritos(districtRows);
-    if (user.role === "superadmin" || user.role === "distrito") {
-      const [adminRows, commissionRows, auditRows] = await Promise.all([
-        apiRequest("/api/admins"),
-        apiRequest("/api/admins/comisiones"),
-        user.role === "superadmin" ? apiRequest("/api/audit").catch(() => []) : Promise.resolve([])
-      ]);
-      setAdmins(adminRows);
-      setComisiones(commissionRows);
-      setAudits(auditRows);
+    try {
+      const eventRows = await apiRequest("/api/eventos");
+      setEventos(eventRows);
+      const districtRows = await apiRequest("/api/eventos/distritos");
+      setDistritos(districtRows);
+      if (user.role === "superadmin" || user.role === "distrito") {
+        const adminRows = await apiRequest("/api/admins");
+        setAdmins(adminRows);
+        const commissionRows = await apiRequest("/api/admins/comisiones");
+        setComisiones(commissionRows);
+        if (user.role === "superadmin") {
+          const auditRows = await apiRequest("/api/audit").catch(() => []);
+          setAudits(auditRows);
+        }
+      }
+    } catch (err) {
+      console.error(err);
     }
   }
 
