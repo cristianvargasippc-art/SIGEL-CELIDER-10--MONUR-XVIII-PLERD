@@ -99,15 +99,17 @@ adminsRouter.post("/", verifyToken, authorize("superadmin", "distrito"), validat
 
 
 adminsRouter.delete("/:adminId", verifyToken, authorize("superadmin", "distrito"), async (req, res) => {
-  if (Number(req.params.adminId) === req.user.id) return res.status(400).json({ error: "No puedes desactivar tu propio usuario" });
+  const adminId = Number(req.params.adminId);
+  if (!Number.isInteger(adminId) || adminId <= 0) return res.status(400).json({ error: "Usuario inválido" });
+  if (adminId === req.user.id) return res.status(400).json({ error: "No puedes desactivar tu propio usuario" });
   if (req.user.role === "distrito") {
-    const target = await prisma.user.findUnique({ where: { id: Number(req.params.adminId) } });
+    const target = await prisma.user.findUnique({ where: { id: adminId } });
     if (!target || target.role !== "admin" || target.distritoId !== req.user.distrito_id) {
       return res.status(403).json({ error: "Solo puedes desactivar mesas directivas de tu distrito" });
     }
   }
   await prisma.user.update({
-    where: { id: Number(req.params.adminId) },
+    where: { id: adminId },
     data: { estado: "inactivo", deletedAt: new Date() }
   });
   await prisma.audit.create({

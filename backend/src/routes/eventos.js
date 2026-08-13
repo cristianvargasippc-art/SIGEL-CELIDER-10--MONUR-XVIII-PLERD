@@ -403,6 +403,7 @@ eventosRouter.patch("/:eventoId/comisiones/:comisionId", verifyToken, authorize(
     const comisionId = Number(req.params.comisionId);
     const permission = await canAccessEvent(req.user, eventoId);
     if (permission.error) return res.status(permission.error[0]).json({ error: permission.error[1] });
+    if (!Number.isInteger(comisionId) || comisionId <= 0) return res.status(400).json({ error: "Comisión inválida" });
 
     const modo = req.body.modo === "duplas" ? "duplas" : "individual";
     await prisma.comision.update({ where: { id: comisionId }, data: { modoAsignacion: modo } });
@@ -419,7 +420,7 @@ eventosRouter.patch("/:eventoId/comisiones/:comisionId", verifyToken, authorize(
 
     return res.json({ success: true });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return res.status(400).json({ error: error.message || "No se pudo actualizar la comisión." });
   }
 });
 

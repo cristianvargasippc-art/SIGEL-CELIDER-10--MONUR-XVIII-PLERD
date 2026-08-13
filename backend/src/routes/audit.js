@@ -6,7 +6,9 @@ export const auditRouter = Router();
 
 auditRouter.get("/", verifyToken, authorize("superadmin"), async (req, res) => {
   const where = {};
-  if (req.query.user_id) where.userId = Number(req.query.user_id);
+  if (req.query.user_id && Number.isInteger(Number(req.query.user_id))) {
+    where.userId = Number(req.query.user_id);
+  }
   if (req.query.action) where.action = String(req.query.action);
   if (req.query.date_from || req.query.date_to) {
     where.createdAt = {};

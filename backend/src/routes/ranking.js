@@ -24,8 +24,10 @@ rankingRouter.get("/general", async (_req, res) => {
 
 rankingRouter.get("/comision/:comisionId", async (req, res) => {
   if (!(await getPublished())) return res.status(403).json({ error: "Calificaciones no publicadas" });
+  const comisionId = Number(req.params.comisionId);
+  if (!Number.isInteger(comisionId) || comisionId <= 0) return res.status(400).json({ error: "Comisión inválida" });
   const rows = await prisma.delegado.findMany({
-    where: { comisionId: Number(req.params.comisionId) },
+    where: { comisionId },
     include: { comision: true, calificacion: true },
     orderBy: { calificacion: { ponderada: "desc" } }
   });
