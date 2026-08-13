@@ -103,24 +103,57 @@ app.use("/api/config", wrapAsyncRoutes(configRouter));
 app.use("/api/export", wrapAsyncRoutes(exportRouter));
 app.use("/api", (_req, res) => res.status(404).json({ error: "Ruta API no encontrada" }));
 
-const candidatePaths = [
-  join(__dirname, "../../frontend/dist"),
-  join(process.cwd(), "frontend/dist"),
-  join(process.cwd(), "../frontend/dist"),
-  join(__dirname, "../frontend/dist"),
-  join(__dirname, "../dist"),
-  join(process.cwd(), "dist")
-];
+function getCandidateFrontendPaths() {
+  const paths = [];
+  const bases = [__dirname, process.cwd()];
+  
+  for (const base of bases) {
+    if (!base) continue;
+    let curr = base;
+    for (let i = 0; i < 5; i++) {
+      paths.push(join(curr, "frontend/dist"));
+      paths.push(join(curr, "dist"));
+      paths.push(join(curr, "public_html/frontend/dist"));
+      paths.push(join(curr, "public_html/dist"));
+      const parent = join(curr, "..");
+      if (parent === curr) break;
+      curr = parent;
+    }
+  }
+  return [...new Set(paths)];
+}
 
-const frontendPath = candidatePaths.find((p) => existsSync(join(p, "index.html"))) || candidatePaths[0];
+function resolveFrontendPath() {
+  const candidates = getCandidateFrontendPaths();
+  for (const p of candidates) {
+    if (existsSync(join(p, "index.html"))) {
+      return p;
+    }
+  }
+  return candidates[0];
+}
 
+const candidatePaths = getCandidateFrontendPaths();
+candidatePaths.forEach((p) => {
+  if (existsSync(p)) {
+    app.use(express.static(p));
+  }
+});
+
+const frontendPath = resolveFrontendPath();
 app.use(express.static(frontendPath));
+
 app.get("*", (_req, res) => {
-  const indexPath = join(frontendPath, "index.html");
+  const activePath = resolveFrontendPath();
+  const indexPath = join(activePath, "index.html");
   if (existsSync(indexPath)) {
     return res.sendFile(indexPath);
   }
-  return res.status(404).json({ error: "Archivo index.html no encontrado en el servidor" });
+  return res.status(404).json({
+    error: "Archivo index.html no encontrado en el servidor",
+    path_checked: indexPath,
+    candidates_searched: candidatePaths
+  });
 });
 
 app.use((err, _req, res, _next) => {
