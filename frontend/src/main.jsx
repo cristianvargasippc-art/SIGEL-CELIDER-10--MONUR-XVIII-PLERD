@@ -234,7 +234,7 @@ function EventosPanel({ user, eventos, setEventos, distritos, onReload, setEvent
     setEventos((current) => [tempEvent, ...current]);
 
     try {
-      await apiRequest("/api/eventos", {
+      const res = await apiRequest("/api/eventos", {
         method: "POST",
         body: JSON.stringify({
           nombre: tempNombre,
@@ -242,7 +242,11 @@ function EventosPanel({ user, eventos, setEventos, distritos, onReload, setEvent
           distrito_id: tempDistritoId ? Number(tempDistritoId) : undefined
         })
       });
-      await onReload();
+      const realEvent = {
+        ...res,
+        _count: res._count || { delegados: 0, comisiones: 0 }
+      };
+      setEventos((current) => current.map((e) => e.id === tempEvent.id ? realEvent : e));
     } catch (error) {
       setEventos((current) => current.filter((e) => e.id !== tempEvent.id));
       setNombre(tempNombre);
@@ -258,7 +262,6 @@ function EventosPanel({ user, eventos, setEventos, distritos, onReload, setEvent
     setEventos((current) => current.filter((e) => e.id !== id));
     try {
       await apiRequest(`/api/eventos/${id}`, { method: "DELETE" });
-      await onReload();
     } catch (error) {
       setEventos(previous);
       displayError(error);
@@ -933,7 +936,7 @@ function UsuariosPanel({ user, distritos, comisiones, admins, setAdmins, onReloa
     setAdmins((current) => [tempAdmin, ...current]);
 
     try {
-      await apiRequest("/api/admins", {
+      const res = await apiRequest("/api/admins", {
         method: "POST",
         body: JSON.stringify({
           email: tempEmail,
@@ -943,7 +946,12 @@ function UsuariosPanel({ user, distritos, comisiones, admins, setAdmins, onReloa
           comision_id: tempComisionId ? Number(tempComisionId) : undefined
         })
       });
-      await onReload();
+      const realAdmin = {
+        ...tempAdmin,
+        id: res.id,
+        email: res.email
+      };
+      setAdmins((current) => current.map((a) => a.id === tempAdmin.id ? realAdmin : a));
     } catch (error) {
       setAdmins((current) => current.filter((a) => a.id !== tempAdmin.id));
       setEmail(tempEmail);
@@ -1059,7 +1067,6 @@ function Dashboard({ user, onLogout }) {
     setAdmins((current) => current.filter((a) => a.id !== admin.id));
     try {
       await apiRequest(`/api/admins/${admin.id}`, { method: "DELETE" });
-      await load();
     } catch (error) {
       setAdmins(previous);
       displayError(error);
