@@ -5,6 +5,7 @@ import express from "express";
 import helmet from "helmet";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { existsSync } from "fs";
 import { adminsRouter } from "./routes/admins.js";
 import { auditRouter } from "./routes/audit.js";
 import { authRouter } from "./routes/auth.js";
@@ -102,10 +103,24 @@ app.use("/api/config", wrapAsyncRoutes(configRouter));
 app.use("/api/export", wrapAsyncRoutes(exportRouter));
 app.use("/api", (_req, res) => res.status(404).json({ error: "Ruta API no encontrada" }));
 
-const frontendPath = join(__dirname, "../../frontend/dist");
+const candidatePaths = [
+  join(__dirname, "../../frontend/dist"),
+  join(process.cwd(), "frontend/dist"),
+  join(process.cwd(), "../frontend/dist"),
+  join(__dirname, "../frontend/dist"),
+  join(__dirname, "../dist"),
+  join(process.cwd(), "dist")
+];
+
+const frontendPath = candidatePaths.find((p) => existsSync(join(p, "index.html"))) || candidatePaths[0];
+
 app.use(express.static(frontendPath));
 app.get("*", (_req, res) => {
-  res.sendFile(join(frontendPath, "index.html"));
+  const indexPath = join(frontendPath, "index.html");
+  if (existsSync(indexPath)) {
+    return res.sendFile(indexPath);
+  }
+  return res.status(404).json({ error: "Archivo index.html no encontrado en el servidor" });
 });
 
 app.use((err, _req, res, _next) => {
