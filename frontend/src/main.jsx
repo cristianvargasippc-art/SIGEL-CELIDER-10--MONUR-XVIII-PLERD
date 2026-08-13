@@ -252,6 +252,7 @@ function EventosPanel({ user, eventos, setEventos, distritos, onReload, setEvent
   }
 
   async function deleteEvento(id) {
+    if (!id || String(id).startsWith("temp-")) return;
     if (!confirm("Eliminar este evento y sus datos asociados?")) return;
     const previous = [...eventos];
     setEventos((current) => current.filter((e) => e.id !== id));
@@ -965,17 +966,20 @@ function UsuariosPanel({ user, distritos, comisiones, admins, setAdmins, onReloa
         <button className="btn primary"><UserPlus size={15} /> Crear</button>
       </form>
       <div className="admin-list">
-        {admins.map((a) => (
-          <div key={a.id} className="row-actions">
-            <div className="link-row">
-              <strong>{a.email}</strong>
-              <span>{a.role} | {a.distrito?.codigo || "Regional"} | {a.comision?.nombre || "Todas las comisiones"} | {a.estado}</span>
+        {admins.map((a) => {
+          const isTemp = String(a.id).startsWith("temp-");
+          return (
+            <div key={a.id} className="row-actions" style={isTemp ? { opacity: 0.6, pointerEvents: "none" } : undefined}>
+              <div className="link-row">
+                <strong>{a.email}</strong>
+                <span>{a.role} | {a.distrito?.codigo || "Regional"} | {a.comision?.nombre || "Todas las comisiones"} | {a.estado}</span>
+              </div>
+              <button className="icon-btn danger" onClick={() => onDeactivate(a)} disabled={isTemp} aria-label={`Desactivar ${a.email}`}>
+                <Trash2 size={16} />
+              </button>
             </div>
-            <button className="icon-btn danger" onClick={() => onDeactivate(a)} aria-label={`Desactivar ${a.email}`}>
-              <Trash2 size={16} />
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </article>
   );
@@ -1049,6 +1053,7 @@ function Dashboard({ user, onLogout }) {
   }
 
   async function deactivateAdmin(admin) {
+    if (!admin || !admin.id || String(admin.id).startsWith("temp-")) return;
     if (!window.confirm(`Desactivar el usuario ${admin.email}?`)) return;
     const previous = [...admins];
     setAdmins((current) => current.filter((a) => a.id !== admin.id));
