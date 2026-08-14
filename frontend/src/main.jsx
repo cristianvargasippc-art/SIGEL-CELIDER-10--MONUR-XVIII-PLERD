@@ -1094,11 +1094,20 @@ function ToastContainer() {
 }
 
 function EncuestaSatisfaccionModal({ isOpen, onClose }) {
-  const [puntuacion, setPuntuacion] = useState(5);
-  const [usabilidad, setUsabilidad] = useState("Excelente");
-  const [velocidad, setVelocidad] = useState("Rápida");
+  const [puntuacion, setPuntuacion] = useState(0);
+  const [usabilidad, setUsabilidad] = useState("");
+  const [velocidad, setVelocidad] = useState("");
   const [comentario, setComentario] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setPuntuacion(0);
+      setUsabilidad("");
+      setVelocidad("");
+      setComentario("");
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -1109,8 +1118,8 @@ function EncuestaSatisfaccionModal({ isOpen, onClose }) {
       await apiRequest("/api/encuestas", {
         method: "POST",
         body: JSON.stringify({
-          puntuacion,
-          respuestas: { usabilidad, velocidad },
+          puntuacion: puntuacion > 0 ? puntuacion : 5,
+          respuestas: { usabilidad: usabilidad || "Buena", velocidad: velocidad || "Aceptable" },
           comentario
         })
       });
@@ -1138,8 +1147,8 @@ function EncuestaSatisfaccionModal({ isOpen, onClose }) {
             <label style={{ textAlign: "center", display: "block", marginBottom: 8 }}>¿Cómo evalúas la calidad y funcionamiento de la página web?</label>
             <div className="star-rating-row">
               {[1, 2, 3, 4, 5].map((star) => (
-                <button type="button" key={star} className={`star-btn ${star <= puntuacion ? "active" : ""}`} onClick={() => setPuntuacion(star)}>
-                  <Star size={30} fill={star <= puntuacion ? "#f59e0b" : "none"} />
+                <button type="button" key={star} className={`star-btn ${puntuacion > 0 && star <= puntuacion ? "active" : ""}`} onClick={() => setPuntuacion(star)}>
+                  <Star size={30} fill={puntuacion > 0 && star <= puntuacion ? "#f59e0b" : "none"} />
                 </button>
               ))}
             </div>
