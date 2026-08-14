@@ -1399,10 +1399,7 @@ function Dashboard({ user, onLogout }) {
           </div>
 
           <div className="top-header-right">
-            <div className="stage-pill-selector">
-              <CalendarDays size={15} />
-              <span>ETAPA REGIONAL - 15-15 jun 2026 - SEDE</span>
-            </div>
+
             <button className="btn secondary small-btn" onClick={() => setShowSurveyModal(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <Star size={15} fill="#f59e0b" color="#f59e0b" /> Encuesta
             </button>
