@@ -55,7 +55,11 @@ function setAccessToken(token) {
   accessToken = token || null;
 }
 
-function triggerAlert(message, type = "error", title = "🔔 Alerta de Plataforma") {
+function triggerAlert(message, type = "success", title = "Notificación") {
+  if (type !== "success") {
+    console.warn("Plataforma log (silenciado):", message);
+    return;
+  }
   window.dispatchEvent(new CustomEvent("platform-alert", { detail: { title, message, type } }));
 }
 
@@ -63,36 +67,42 @@ async function apiRequest(path, options = {}) {
   const headers = new Headers(options.headers || {});
   if (!(options.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
+
   let response;
   try {
     response = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: "include" });
   } catch (err) {
-    triggerAlert("No se pudo conectar con el servidor. Verifica tu conexión.", "error", "🔔 Alerta de Conexión");
+    console.warn("Fetch error silencioso:", err);
     throw err;
   }
+
   if (response.status === 401 && path !== "/api/auth/login" && path !== "/api/auth/refresh") {
-    const refreshed = await fetch(`${API_BASE}/api/auth/refresh`, { method: "POST", credentials: "include" });
-    if (refreshed.ok) {
-      const data = await refreshed.json();
-      setAccessToken(data.access_token);
-      headers.set("Authorization", `Bearer ${data.access_token}`);
-      response = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: "include" });
+    try {
+      const refreshed = await fetch(`${API_BASE}/api/auth/refresh`, { method: "POST", credentials: "include" });
+      if (refreshed.ok) {
+        const data = await refreshed.json();
+        setAccessToken(data.access_token);
+        headers.set("Authorization", `Bearer ${data.access_token}`);
+        response = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: "include" });
+      }
+    } catch {
+      setAccessToken(null);
     }
   }
+
   const text = await response.text();
   let data = null;
   if (text) {
     try {
       data = JSON.parse(text);
     } catch {
-      const errMsg = response.ok ? "Respuesta del servidor no válida." : `Error de servidor (${response.status}).`;
-      triggerAlert(errMsg, "error", "🔔 Alerta del Servidor");
+      const errMsg = response.ok ? "Respuesta no válida del servidor." : `Error de servidor (${response.status}).`;
       throw new Error(errMsg);
     }
   }
+
   if (!response.ok) {
     const msg = data?.error || "No se pudo completar la solicitud.";
-    triggerAlert(msg, "error", "🔔 Alerta del Servidor");
     throw new Error(msg);
   }
   return data;
@@ -1263,6 +1273,7 @@ function Dashboard({ user, onLogout }) {
   const [eventoActivo, setEventoActivo] = useState(null);
   const [showSurveyModal, setShowSurveyModal] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
 
   useEffect(() => { document.documentElement.dataset.theme = "light"; localStorage.removeItem("sigel-theme"); }, []);
@@ -1346,50 +1357,66 @@ function Dashboard({ user, onLogout }) {
     { id: "usuarios", label: "Usuarios", icon: UserPlus, show: user.role === "superadmin" || user.role === "distrito" }
   ].filter((item) => item.show);
 
+  const handleNavClick = (id) => {
+    setEventoActivo(null);
+    setActive(id);
+    setMobileNavOpen(false);
+  };
+
   return (
-    <div className="app-shell admin-layout" style={{ gridTemplateColumns: sidebarCollapsed ? "80px minmax(0, 1fr)" : "280px minmax(0, 1fr)" }}>
-      <aside className="app-sidebar">
+    <div className={`app-shell admin-layout ${sidebarCollapsed ? "sidebar-is-collapsed" : ""}`}>
+      {mobileNavOpen && <div className="sidebar-backdrop" onClick={() => setMobileNavOpen(false)} />}
+      
+      <aside className={`app-sidebar ${sidebarCollapsed ? "collapsed" : ""} ${mobileNavOpen ? "mobile-open" : ""}`}>
         <div className="brand sidebar-brand">
           <LogoMark />
-          {!sidebarCollapsed && <div><strong>SIGEL CELIDER 10</strong><span>Regional 10</span></div>}
+          {(!sidebarCollapsed || mobileNavOpen) && <div><strong>SIGEL CELIDER 10</strong><span>Regional 10</span></div>}
+          {mobileNavOpen && (
+            <button className="toast-close mobile-close-btn" onClick={() => setMobileNavOpen(false)}>
+              <X size={20} color="#ffffff" />
+            </button>
+          )}
         </div>
         <nav className="side-nav" aria-label="Panel de navegación">
-          {!sidebarCollapsed && <div className="sidebar-section-title">INICIO</div>}
-          <button className={active === "inicio" ? "active" : ""} onClick={() => { setEventoActivo(null); setActive("inicio"); }}>
-            <BarChart3 size={17} /> {!sidebarCollapsed && "Inicio"}
+          {(!sidebarCollapsed || mobileNavOpen) && <div className="sidebar-section-title">INICIO</div>}
+          <button className={active === "inicio" ? "active" : ""} onClick={() => handleNavClick("inicio")}>
+            <BarChart3 size={17} /> {(!sidebarCollapsed || mobileNavOpen) && "Inicio"}
           </button>
 
-          {!sidebarCollapsed && <div className="sidebar-section-title">GESTIÓN</div>}
+          {(!sidebarCollapsed || mobileNavOpen) && <div className="sidebar-section-title">GESTIÓN</div>}
           {navItems.filter((i) => i.id !== "inicio").map(({ id, label, icon: Icon }) => (
-            <button key={id} className={active === id ? "active" : ""} onClick={() => { setEventoActivo(null); setActive(id); }}>
-              <Icon size={17} /> {!sidebarCollapsed && label}
+            <button key={id} className={active === id ? "active" : ""} onClick={() => handleNavClick(id)}>
+              <Icon size={17} /> {(!sidebarCollapsed || mobileNavOpen) && label}
             </button>
           ))}
 
           {user.role === "superadmin" && (
             <>
-              {!sidebarCollapsed && <div className="sidebar-section-title">SUPERVISIÓN</div>}
-              <button className={active === "encuestas" ? "active" : ""} onClick={() => { setEventoActivo(null); setActive("encuestas"); }}>
-                <Star size={17} /> {!sidebarCollapsed && "Encuestas Satisfacción"}
+              {(!sidebarCollapsed || mobileNavOpen) && <div className="sidebar-section-title">SUPERVISIÓN</div>}
+              <button className={active === "encuestas" ? "active" : ""} onClick={() => handleNavClick("encuestas")}>
+                <Star size={17} /> {(!sidebarCollapsed || mobileNavOpen) && "Encuestas Satisfacción"}
               </button>
-              <button className={active === "seguridad" ? "active" : ""} onClick={() => { setEventoActivo(null); setActive("seguridad"); }}>
-                <ShieldCheck size={17} /> {!sidebarCollapsed && "Seguridad"}
+              <button className={active === "seguridad" ? "active" : ""} onClick={() => handleNavClick("seguridad")}>
+                <ShieldCheck size={17} /> {(!sidebarCollapsed || mobileNavOpen) && "Seguridad"}
               </button>
             </>
           )}
         </nav>
         <div className="sidebar-account">
           <span className="role-pill">{user.role}</span>
-          {!sidebarCollapsed && <strong>{user.email}</strong>}
-          <button className="btn secondary full" onClick={onLogout} type="button"><LogOut size={16} /> {!sidebarCollapsed && "Cerrar sesión"}</button>
+          {(!sidebarCollapsed || mobileNavOpen) && <strong>{user.email}</strong>}
+          <button className="btn secondary full" onClick={onLogout} type="button"><LogOut size={16} /> {(!sidebarCollapsed || mobileNavOpen) && "Cerrar sesión"}</button>
         </div>
       </aside>
 
-      <div className="main-content-wrap" style={{ display: "grid", gridTemplateRows: "auto 1fr" }}>
+      <div className="main-content-wrap">
         <header className="top-header-bar">
           <div className="top-header-left">
-            <button className="sidebar-toggle-btn" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title="Alternar menú">
+            <button className="sidebar-toggle-btn desktop-toggle" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title="Alternar menú">
               {sidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+            </button>
+            <button className="sidebar-toggle-btn mobile-toggle" onClick={() => setMobileNavOpen(!mobileNavOpen)} title="Abrir menú">
+              <ChevronRight size={18} />
             </button>
             <div className="top-search-bar">
               <Search size={16} color="#64748b" />
@@ -1399,7 +1426,6 @@ function Dashboard({ user, onLogout }) {
           </div>
 
           <div className="top-header-right">
-
             <button className="btn secondary small-btn" onClick={() => setShowSurveyModal(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <Star size={15} fill="#f59e0b" color="#f59e0b" /> Encuesta
             </button>

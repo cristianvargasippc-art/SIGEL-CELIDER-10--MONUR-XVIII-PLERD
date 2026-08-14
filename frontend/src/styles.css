@@ -2374,3 +2374,88 @@ input:focus, select:focus, textarea:focus {
     padding: 12px;
   }
 }
+
+
+/* ── Mobile Sidebar Drawer & Flawless Responsive Tweaks ── */
+.desktop-toggle {
+  display: grid;
+}
+
+.mobile-toggle {
+  display: none;
+}
+
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 450;
+  background: rgba(8, 29, 54, 0.6);
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s ease;
+}
+
+.mobile-close-btn {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+@media (max-width: 1024px) {
+  .desktop-toggle {
+    display: none;
+  }
+  .mobile-toggle {
+    display: grid;
+  }
+  .admin-layout {
+    grid-template-columns: 1fr !important;
+  }
+  .app-sidebar {
+    position: fixed;
+    top: 0;
+    left: -300px;
+    width: 280px;
+    height: 100vh;
+    box-shadow: 8px 0 30px rgba(0, 0, 0, 0.35);
+    z-index: 500;
+  }
+  .app-sidebar.mobile-open {
+    left: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .top-search-bar {
+    display: none;
+  }
+  .top-header-bar {
+    padding: 0 12px;
+    height: 56px;
+  }
+  .welcome-greeting-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .welcome-title {
+    font-size: 19px;
+  }
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .metric-card {
+    padding: 14px;
+  }
+  .workspace {
+    padding: 12px;
+  }
+  .survey-modal-card {
+    padding: 18px;
+    max-width: 92vw;
+  }
+  .star-btn {
+    font-size: 24px;
+  }
+}
