@@ -454,32 +454,33 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
       const previous = [...delegados];
       setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "" } : d));
       try {
-        await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: null }) });
+        await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: 0 }) });
       } catch (error) {
         setDelegados(previous);
         displayError(error);
       }
       return;
     }
-    let nextValue = Number(raw);
-    if (!Number.isFinite(nextValue)) return;
-    if (!Number.isInteger(nextValue)) {
-      window.alert("Solo se permiten cantidades enteras (sin decimales).");
-      return;
-    }
-    if (criterios[key]) {
-      if (nextValue < 0 || nextValue > criterios[key].max) {
-        window.alert(`La calificación de ${criterios[key].label} debe estar entre 0 y ${criterios[key].max}.`);
-        return;
-      }
-    }
+    let parsed = parseInt(raw, 10);
+    if (!Number.isFinite(parsed)) return;
+    if (parsed < 0) parsed = 0;
+    const maxVal = criterios[key]?.max ?? 100;
+    if (parsed > maxVal) parsed = maxVal;
+
     const previous = [...delegados];
-    setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: nextValue } : d));
+    setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: parsed } : d));
     try {
-      await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: nextValue }) });
+      await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: parsed }) });
     } catch (error) {
       setDelegados(previous);
       displayError(error);
+    }
+  }
+
+  function handleGradeBlur(id, key, currentValue) {
+    if (String(currentValue ?? "").trim() === "") {
+      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: 0 } : d));
+      apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: 0 }) }).catch(console.error);
     }
   }
 
@@ -876,9 +877,10 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
                           max={criterios[key].max}
                           step="1"
                           inputMode="numeric"
-                          placeholder=""
+                          placeholder="0"
                           value={d[key]}
                           onChange={(e) => updateCalificacion(d.id, key, e.target.value)}
+                          onBlur={(e) => handleGradeBlur(d.id, key, e.target.value)}
                         />
                       </td>
                     ))}
