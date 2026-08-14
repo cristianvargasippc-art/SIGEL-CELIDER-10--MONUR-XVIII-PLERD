@@ -15,21 +15,19 @@ import { delegadosRouter } from "./routes/delegados.js";
 import { eventosRouter } from "./routes/eventos.js";
 import { exportRouter } from "./routes/export.js";
 import { rankingRouter } from "./routes/ranking.js";
+import { encuestasRouter } from "./routes/encuestas.js";
 import { prisma } from "./db.js";
 import { logger } from "./utils/logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// ── Validate required environment variables ──────────────────────────────────
 const requiredEnvVars = ["DATABASE_URL", "JWT_SECRET"];
 const missingVars = requiredEnvVars.filter((v) => !process.env[v]);
 if (missingVars.length > 0) {
   console.error(`❌ FATAL: Missing required environment variables: ${missingVars.join(", ")}`);
-  console.error("   Configure them in Hostinger hPanel → Environment Variables");
   process.exit(1);
 }
-// ─────────────────────────────────────────────────────────────────────────────
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -101,6 +99,7 @@ app.use("/api/audit", wrapAsyncRoutes(auditRouter));
 app.use("/api/admins", wrapAsyncRoutes(adminsRouter));
 app.use("/api/config", wrapAsyncRoutes(configRouter));
 app.use("/api/export", wrapAsyncRoutes(exportRouter));
+app.use("/api/encuestas", wrapAsyncRoutes(encuestasRouter));
 app.use("/api", (_req, res) => res.status(404).json({ error: "Ruta API no encontrada" }));
 
 function getCandidateFrontendPaths() {
@@ -203,8 +202,9 @@ app.get("*", (_req, res) => {
 app.use((err, _req, res, _next) => {
   logger.error("Unhandled error", { error: err.message, stack: err.stack });
   return res.status(500).json({
-    error: "Error interno del servidor",
+    error: "Ocurrió una eventualidad en la plataforma. Se ha emitido una notificación de alerta.",
     detail: err.message,
+    alert: true,
     code: err.code || null
   });
 });

@@ -1910,6 +1910,343 @@ input:focus, select:focus, textarea:focus {
   border-color: var(--danger);
 }
 
+/* ── Toast / Push Alert Notifications ── */
+.toast-container {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 420px;
+  width: calc(100vw - 36px);
+  pointer-events: none;
+}
+
+.toast-alert {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgba(8, 43, 74, 0.16), 0 2px 6px rgba(0, 0, 0, 0.06);
+  border-left: 5px solid var(--blue);
+  animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.25s ease;
+}
+
+.toast-alert.error {
+  border-left-color: #ef4444;
+  background: #fef2f2;
+}
+
+.toast-alert.warning {
+  border-left-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.toast-alert.success {
+  border-left-color: #10b981;
+  background: #f0fdf4;
+}
+
+.toast-alert.info {
+  border-left-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.toast-content {
+  flex: 1;
+}
+
+.toast-title {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--navy);
+  margin-bottom: 2px;
+}
+
+.toast-alert.error .toast-title { color: #991b1b; }
+.toast-alert.warning .toast-title { color: #92400e; }
+.toast-alert.success .toast-title { color: #065f46; }
+
+.toast-message {
+  font-size: 12.5px;
+  color: #334155;
+  line-height: 1.45;
+}
+
+.toast-close {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  padding: 2px;
+  margin-left: 4px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.toast-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #0f172a;
+}
+
+@keyframes toastSlideIn {
+  from {
+    transform: translateX(100%) scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* ── Encuesta de Satisfacción ── */
+.survey-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(8, 29, 54, 0.65);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  animation: fadeIn 0.2s ease;
+}
+
+.survey-modal-card {
+  background: #ffffff;
+  border-radius: 16px;
+  max-width: 540px;
+  width: 100%;
+  padding: 26px;
+  box-shadow: 0 20px 45px rgba(8, 43, 74, 0.25);
+  border: 1px solid rgba(127, 215, 255, 0.3);
+  display: grid;
+  gap: 20px;
+}
+
+.survey-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.survey-header h3 {
+  font-size: 20px;
+  color: var(--navy);
+}
+
+.star-rating-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.star-btn {
+  background: transparent;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  transition: transform 0.15s ease, color 0.15s ease;
+  color: #cbd5e1;
+}
+
+.star-btn.active, .star-btn:hover {
+  color: #f59e0b;
+  transform: scale(1.18);
+}
+
+.survey-question {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.survey-question label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.survey-options-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.survey-option-btn {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.survey-option-btn.selected {
+  background: var(--blue);
+  color: #ffffff;
+  border-color: var(--blue);
+}
+
+/* ── PLERD Mockup Style Improvements (topbar & sidebar) ── */
+.top-header-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+.top-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.sidebar-toggle-btn {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  color: #64748b;
+}
+
+.sidebar-toggle-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.top-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 12px;
+  width: 260px;
+}
+
+.top-search-bar input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 13px;
+  padding: 0;
+  min-height: auto;
+}
+
+.search-shortcut-badge {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.top-header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.stage-pill-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #edf7ed;
+  border: 1px solid #c8e6c9;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1b5e20;
+}
+
+.user-avatar-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 14px;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3);
+}
+
+.sidebar-section-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.45);
+  margin: 14px 0 6px 8px;
+  text-transform: uppercase;
+}
+
+.welcome-header-card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+  display: grid;
+  gap: 16px;
+}
+
+.welcome-greeting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.welcome-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.progress-banner-line {
+  height: 4px;
+  width: 100%;
+  border-radius: 2px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.progress-banner-fill {
+  height: 100%;
+  width: 45%;
+  background: linear-gradient(90deg, #0ea5e9, #2563eb);
+  border-radius: 2px;
+}
+
 /* Responsive adjustments for brand logo and layout */
 @media (max-width: 480px) {
   .logo-mark {
@@ -1928,3 +2265,4 @@ input:focus, select:focus, textarea:focus {
     gap: 8px;
   }
 }
+

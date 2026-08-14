@@ -16,7 +16,16 @@ import {
   Users,
   ClipboardCheck,
   Search,
-  RefreshCw
+  RefreshCw,
+  Star,
+  MessageSquare,
+  Bell,
+  Settings,
+  Command,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  SlidersHorizontal
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import "./styles.css";
@@ -46,11 +55,21 @@ function setAccessToken(token) {
   accessToken = token || null;
 }
 
+function triggerAlert(message, type = "error", title = "🔔 Alerta de Plataforma") {
+  window.dispatchEvent(new CustomEvent("platform-alert", { detail: { title, message, type } }));
+}
+
 async function apiRequest(path, options = {}) {
   const headers = new Headers(options.headers || {});
   if (!(options.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
-  let response = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: "include" });
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: "include" });
+  } catch (err) {
+    triggerAlert("No se pudo conectar con el servidor. Verifica tu conexión.", "error", "🔔 Alerta de Conexión");
+    throw err;
+  }
   if (response.status === 401 && path !== "/api/auth/login" && path !== "/api/auth/refresh") {
     const refreshed = await fetch(`${API_BASE}/api/auth/refresh`, { method: "POST", credentials: "include" });
     if (refreshed.ok) {
@@ -66,10 +85,16 @@ async function apiRequest(path, options = {}) {
     try {
       data = JSON.parse(text);
     } catch {
-      throw new Error(response.ok ? "El servidor devolvio una respuesta inesperada." : `Error del servidor (${response.status}).`);
+      const errMsg = response.ok ? "Respuesta del servidor no válida." : `Error de servidor (${response.status}).`;
+      triggerAlert(errMsg, "error", "🔔 Alerta del Servidor");
+      throw new Error(errMsg);
     }
   }
-  if (!response.ok) throw new Error(data?.error || "No se pudo completar la solicitud.");
+  if (!response.ok) {
+    const msg = data?.error || "No se pudo completar la solicitud.";
+    triggerAlert(msg, "error", "🔔 Alerta del Servidor");
+    throw new Error(msg);
+  }
   return data;
 }
 
@@ -1021,6 +1046,213 @@ function RegionalReport({ eventos }) {
   );
 }
 
+
+function ToastContainer() {
+  const [toasts, setToasts] = useState([]);
+
+  useEffect(() => {
+    function handleAlert(e) {
+      const { title, message, type = "info" } = e.detail || {};
+      const id = Date.now() + Math.random();
+      setToasts((prev) => [...prev, { id, title: title || "Notificación", message, type }]);
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, 6000);
+    }
+    window.addEventListener("platform-alert", handleAlert);
+    return () => window.removeEventListener("platform-alert", handleAlert);
+  }, []);
+
+  if (toasts.length === 0) return null;
+
+  return (
+    <div className="toast-container" aria-live="polite">
+      {toasts.map((t) => (
+        <div key={t.id} className={`toast-alert ${t.type}`}>
+          <Bell size={18} style={{ marginTop: 2, flexShrink: 0 }} />
+          <div className="toast-content">
+            <div className="toast-title">{t.title}</div>
+            <div className="toast-message">{t.message}</div>
+          </div>
+          <button className="toast-close" onClick={() => setToasts((prev) => prev.filter((item) => item.id !== t.id))}>
+            <X size={15} />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EncuestaSatisfaccionModal({ isOpen, onClose }) {
+  const [puntuacion, setPuntuacion] = useState(5);
+  const [usabilidad, setUsabilidad] = useState("Excelente");
+  const [velocidad, setVelocidad] = useState("Rápida");
+  const [comentario, setComentario] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  if (!isOpen) return null;
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await apiRequest("/api/encuestas", {
+        method: "POST",
+        body: JSON.stringify({
+          puntuacion,
+          respuestas: { usabilidad, velocidad },
+          comentario
+        })
+      });
+      triggerAlert("¡Gracias por completar la encuesta de satisfacción!", "success", "Encuesta Guardada");
+      onClose();
+    } catch (err) {
+      triggerAlert(err.message || "Error al enviar la encuesta", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="survey-modal-overlay" onClick={onClose}>
+      <div className="survey-modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="survey-header">
+          <div>
+            <h3>Encuesta de Satisfacción</h3>
+            <p>Evalúa el funcionamiento de la plataforma SIGEL CELIDER 10 (Opcional)</p>
+          </div>
+          <button className="toast-close" onClick={onClose}><X size={18} /></button>
+        </div>
+        <form onSubmit={handleSubmit} style={{ display: "grid", gap: 16 }}>
+          <div>
+            <label style={{ textAlign: "center", display: "block", marginBottom: 8 }}>¿Cómo evalúas la calidad y funcionamiento de la página web?</label>
+            <div className="star-rating-row">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button type="button" key={star} className={`star-btn ${star <= puntuacion ? "active" : ""}`} onClick={() => setPuntuacion(star)}>
+                  <Star size={30} fill={star <= puntuacion ? "#f59e0b" : "none"} />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="survey-question">
+            <label>1. Navegación y Usabilidad:</label>
+            <div className="survey-options-row">
+              {["Excelente", "Buena", "Regular", "Complicada"].map((opt) => (
+                <button type="button" key={opt} className={`survey-option-btn ${usabilidad === opt ? "selected" : ""}`} onClick={() => setUsabilidad(opt)}>
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="survey-question">
+            <label>2. Velocidad del Sistema:</label>
+            <div className="survey-options-row">
+              {["Muy Rápida", "Rápida", "Aceptable", "Lenta"].map((opt) => (
+                <button type="button" key={opt} className={`survey-option-btn ${velocidad === opt ? "selected" : ""}`} onClick={() => setVelocidad(opt)}>
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label style={{ marginBottom: 6 }}>Comentario o sugerencias de mejora (Opcional):</label>
+            <textarea value={comentario} onChange={(e) => setComentario(e.target.value)} placeholder="Comparte tu opinión sobre el rendimiento o diseño..." rows={3} />
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 10 }}>
+            <button type="button" className="btn secondary" onClick={onClose}>Omitir / Cerrar</button>
+            <button type="submit" className="btn primary" disabled={loading}>{loading ? "Enviando..." : "Enviar Respuesta"}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function EncuestasAdminPanel() {
+  const [data, setData] = useState({ encuestas: [], stats: { total: 0, promedio: 0, desglose: {} } });
+  const [loading, setLoading] = useState(true);
+
+  async function loadData() {
+    try {
+      setLoading(true);
+      const res = await apiRequest("/api/encuestas");
+      setData(res);
+    } catch (err) {
+      triggerAlert("Error cargando el reporte de encuestas", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { loadData(); }, []);
+  const { encuestas, stats } = data;
+
+  return (
+    <article className="activity-card">
+      <div className="table-title">
+        <div>
+          <span>Supervisión Exclusiva SuperAdmin</span>
+          <h2>Encuestas de Satisfacción y Rendimiento de Usuarios</h2>
+        </div>
+        <button className="btn secondary" onClick={loadData} disabled={loading}>
+          <RefreshCw size={15} /> Actualizar
+        </button>
+      </div>
+
+      <div className="metrics-grid" style={{ marginBottom: 20 }}>
+        <Metric icon={Star} label="Promedio General" value={`${stats.promedio} / 5.0 ⭐`} note="Puntuación acumulada" />
+        <Metric icon={Users} label="Total Encuestas" value={stats.total} note="Respuestas registradas" />
+        <Metric icon={CheckCircle2} label="Estado" value={stats.promedio >= 4 ? "Óptimo" : "Revisión"} note="Evaluación del sistema" />
+      </div>
+
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Usuario</th>
+              <th>Rol</th>
+              <th>Puntuación</th>
+              <th>Evaluación Técnica</th>
+              <th>Comentarios / Retroalimentación</th>
+            </tr>
+          </thead>
+          <tbody>
+            {encuestas.length === 0 && (
+              <tr>
+                <td colSpan={6} style={{ textAlign: "center", padding: "2rem" }}>Aún no se han recibido respuestas de encuestas de los usuarios.</td>
+              </tr>
+            )}
+            {encuestas.map((item) => (
+              <tr key={item.id}>
+                <td style={{ whiteSpace: "nowrap" }}>{new Date(item.createdAt).toLocaleString("es-DO")}</td>
+                <td><strong>{item.user?.email || "Usuario N/A"}</strong></td>
+                <td><span className="role-pill small">{item.user?.role}</span></td>
+                <td>
+                  <span style={{ fontWeight: 800, color: "#f59e0b", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    {item.puntuacion} <Star size={14} fill="#f59e0b" />
+                  </span>
+                </td>
+                <td>
+                  <span className="details-text">
+                    Navegación: {item.respuestas?.usabilidad || "N/A"} | Velocidad: {item.respuestas?.velocidad || "N/A"}
+                  </span>
+                </td>
+                <td>{item.comentario || <em style={{ color: "#94a3b8" }}>Sin comentarios adicionales</em>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  );
+}
+
+
 function Dashboard({ user, onLogout }) {
   const [active, setActive] = useState(user.role === "admin" ? "calificaciones" : "inicio");
   const [eventos, setEventos] = useState([]);
@@ -1029,6 +1261,9 @@ function Dashboard({ user, onLogout }) {
   const [comisiones, setComisiones] = useState([]);
   const [audits, setAudits] = useState([]);
   const [eventoActivo, setEventoActivo] = useState(null);
+  const [showSurveyModal, setShowSurveyModal] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [globalSearch, setGlobalSearch] = useState("");
 
   useEffect(() => { document.documentElement.dataset.theme = "light"; localStorage.removeItem("sigel-theme"); }, []);
 
@@ -1100,61 +1335,125 @@ function Dashboard({ user, onLogout }) {
   const totalDelegados = eventos.reduce((sum, e) => sum + (e._count?.delegados || 0), 0);
   const totalComisiones = eventos.reduce((sum, e) => sum + (e._count?.comisiones || 0), 0);
   const isRegional = ["superadmin", "regional"].includes(user.role);
+  const userName = user.email ? user.email.split("@")[0].toUpperCase() : "USUARIO";
+
   const navItems = [
     { id: "inicio", label: "Inicio", icon: BarChart3, show: user.role !== "admin" },
     { id: "eventos", label: "Eventos", icon: FileSpreadsheet, show: user.role !== "admin" },
     { id: "calificaciones", label: "Calificaciones", icon: ClipboardCheck, show: true },
     { id: "agenda", label: "Agenda", icon: CalendarDays, show: user.role === "superadmin" || user.role === "distrito" },
     { id: "regional", label: "Regional", icon: Users, show: isRegional },
-    { id: "usuarios", label: "Usuarios", icon: UserPlus, show: user.role === "superadmin" || user.role === "distrito" },
-    { id: "seguridad", label: "Seguridad", icon: ShieldCheck, show: user.role === "superadmin" }
+    { id: "usuarios", label: "Usuarios", icon: UserPlus, show: user.role === "superadmin" || user.role === "distrito" }
   ].filter((item) => item.show);
 
   return (
-    <div className="app-shell admin-layout">
+    <div className="app-shell admin-layout" style={{ gridTemplateColumns: sidebarCollapsed ? "80px minmax(0, 1fr)" : "280px minmax(0, 1fr)" }}>
       <aside className="app-sidebar">
         <div className="brand sidebar-brand">
           <LogoMark />
-          <div><strong>SIGEL CELIDER 10</strong><span>Regional 10</span></div>
+          {!sidebarCollapsed && <div><strong>SIGEL CELIDER 10</strong><span>Regional 10</span></div>}
         </div>
-        <nav className="side-nav" aria-label="Panel de administración">
-          {navItems.map(({ id, label, icon: Icon }) => (
+        <nav className="side-nav" aria-label="Panel de navegación">
+          {!sidebarCollapsed && <div className="sidebar-section-title">INICIO</div>}
+          <button className={active === "inicio" ? "active" : ""} onClick={() => { setEventoActivo(null); setActive("inicio"); }}>
+            <BarChart3 size={17} /> {!sidebarCollapsed && "Inicio"}
+          </button>
+
+          {!sidebarCollapsed && <div className="sidebar-section-title">GESTIÓN</div>}
+          {navItems.filter((i) => i.id !== "inicio").map(({ id, label, icon: Icon }) => (
             <button key={id} className={active === id ? "active" : ""} onClick={() => { setEventoActivo(null); setActive(id); }}>
-              <Icon size={17} /> {label}
+              <Icon size={17} /> {!sidebarCollapsed && label}
             </button>
           ))}
+
+          {user.role === "superadmin" && (
+            <>
+              {!sidebarCollapsed && <div className="sidebar-section-title">SUPERVISIÓN</div>}
+              <button className={active === "encuestas" ? "active" : ""} onClick={() => { setEventoActivo(null); setActive("encuestas"); }}>
+                <Star size={17} /> {!sidebarCollapsed && "Encuestas Satisfacción"}
+              </button>
+              <button className={active === "seguridad" ? "active" : ""} onClick={() => { setEventoActivo(null); setActive("seguridad"); }}>
+                <ShieldCheck size={17} /> {!sidebarCollapsed && "Seguridad"}
+              </button>
+            </>
+          )}
         </nav>
         <div className="sidebar-account">
           <span className="role-pill">{user.role}</span>
-          <strong>{user.email}</strong>
-          <button className="btn secondary full" onClick={onLogout} type="button"><LogOut size={16} /> Cerrar sesión</button>
+          {!sidebarCollapsed && <strong>{user.email}</strong>}
+          <button className="btn secondary full" onClick={onLogout} type="button"><LogOut size={16} /> {!sidebarCollapsed && "Cerrar sesión"}</button>
         </div>
       </aside>
-      <main className="workspace">
-        {active === "inicio" && (
-          <>
-            <section className="admin-hero lighthouse-hero">
-              <div>
-                <span>Bienvenido</span>
-                <h1>Bienvenido al panel institucional CELIDER Regional 10</h1>
-                <p>Gestiona eventos, carga listados, asigna países, verifica asistencia y consulta auditoría desde un entorno protegido por roles.</p>
-              </div>
-            </section>
-            <section className="metrics-grid">
-              <Metric icon={BarChart3} label="Eventos" value={eventos.length} note="Registrados" />
-              <Metric icon={Users} label="Delegados" value={totalDelegados} note="Cargados" />
-              <Metric icon={FileSpreadsheet} label="Comisiones" value={totalComisiones} note="Configuradas" />
-              <Metric icon={ShieldCheck} label="Seguridad" value="Activa" note="Acceso por roles" />
-            </section>
-          </>
-        )}
-        {active === "eventos" && (eventoActivo ? <EventoDetalle user={user} evento={eventoActivo} onBack={() => { setEventoActivo(null); load(); }} /> : <EventosPanel user={user} eventos={eventos} setEventos={setEventos} distritos={distritos} onReload={load} setEventoActivo={setEventoActivo} />)}
-        {active === "calificaciones" && (eventoActivo ? <EventoDetalle user={user} evento={eventoActivo} initialView="calificaciones" onBack={() => { setEventoActivo(null); load(); }} /> : <EventosPanel user={user} eventos={eventos} setEventos={setEventos} distritos={distritos} onReload={load} setEventoActivo={setEventoActivo} />)}
-        {active === "agenda" && <AgendaPanel eventos={eventos} />}
-        {active === "regional" && <RegionalReport eventos={eventos} />}
-        {active === "usuarios" && <UsuariosPanel user={user} distritos={distritos} comisiones={comisiones} admins={admins} setAdmins={setAdmins} onReload={load} onDeactivate={deactivateAdmin} />}
-        {active === "seguridad" && user.role === "superadmin" && <SeguridadPanel audits={audits} onRefresh={loadAudits} />}
-      </main>
+
+      <div className="main-content-wrap" style={{ display: "grid", gridTemplateRows: "auto 1fr" }}>
+        <header className="top-header-bar">
+          <div className="top-header-left">
+            <button className="sidebar-toggle-btn" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title="Alternar menú">
+              {sidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+            </button>
+            <div className="top-search-bar">
+              <Search size={16} color="#64748b" />
+              <input type="text" placeholder="Buscar..." value={globalSearch} onChange={(e) => setGlobalSearch(e.target.value)} />
+              <span className="search-shortcut-badge">⌘K</span>
+            </div>
+          </div>
+
+          <div className="top-header-right">
+            <div className="stage-pill-selector">
+              <CalendarDays size={15} />
+              <span>ETAPA REGIONAL - 15-15 jun 2026 - SEDE</span>
+            </div>
+            <button className="btn secondary small-btn" onClick={() => setShowSurveyModal(true)} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <Star size={15} fill="#f59e0b" color="#f59e0b" /> Encuesta
+            </button>
+            <button className="icon-btn" title="Ajustes de sistema" onClick={() => triggerAlert("Ajustes de plataforma activos", "info", "⚙️ Configuración")}>
+              <Settings size={18} />
+            </button>
+            <button className="icon-btn" title="Alertas de plataforma" onClick={() => triggerAlert("Sin alertas críticas en la plataforma", "success", "🔔 Estado de Alerta")}>
+              <Bell size={18} />
+            </button>
+            <div className="user-avatar-badge" title={user.email}>
+              {user.email ? user.email[0].toUpperCase() : "U"}
+            </div>
+          </div>
+        </header>
+
+        <main className="workspace">
+          {active === "inicio" && (
+            <>
+              <section className="welcome-header-card">
+                <div className="welcome-greeting-row">
+                  <div>
+                    <h1 className="welcome-title">Hola, Bienvenido/a de nuevo {userName} 👋</h1>
+                    <p style={{ marginTop: 4 }}>Panel Institucional de Gestión y Calificación CELIDER 10 - Regional 10</p>
+                  </div>
+                  <button className="btn primary" onClick={() => setShowSurveyModal(true)}>
+                    <Star size={16} fill="#ffffff" /> Llenar Encuesta Opcional
+                  </button>
+                </div>
+                <div className="progress-banner-line">
+                  <div className="progress-banner-fill" />
+                </div>
+              </section>
+              <section className="metrics-grid">
+                <Metric icon={BarChart3} label="Eventos" value={eventos.length} note="Registrados" />
+                <Metric icon={Users} label="Delegados" value={totalDelegados} note="Cargados" />
+                <Metric icon={FileSpreadsheet} label="Comisiones" value={totalComisiones} note="Configuradas" />
+                <Metric icon={ShieldCheck} label="Seguridad" value="Activa" note="Acceso por roles" />
+              </section>
+            </>
+          )}
+          {active === "eventos" && (eventoActivo ? <EventoDetalle user={user} evento={eventoActivo} onBack={() => { setEventoActivo(null); load(); }} /> : <EventosPanel user={user} eventos={eventos} setEventos={setEventos} distritos={distritos} onReload={load} setEventoActivo={setEventoActivo} />)}
+          {active === "calificaciones" && (eventoActivo ? <EventoDetalle user={user} evento={eventoActivo} initialView="calificaciones" onBack={() => { setEventoActivo(null); load(); }} /> : <EventosPanel user={user} eventos={eventos} setEventos={setEventos} distritos={distritos} onReload={load} setEventoActivo={setEventoActivo} />)}
+          {active === "agenda" && <AgendaPanel eventos={eventos} />}
+          {active === "regional" && <RegionalReport eventos={eventos} />}
+          {active === "usuarios" && <UsuariosPanel user={user} distritos={distritos} comisiones={comisiones} admins={admins} setAdmins={setAdmins} onReload={load} onDeactivate={deactivateAdmin} />}
+          {active === "encuestas" && user.role === "superadmin" && <EncuestasAdminPanel />}
+          {active === "seguridad" && user.role === "superadmin" && <SeguridadPanel audits={audits} onRefresh={loadAudits} />}
+        </main>
+
+        <EncuestaSatisfaccionModal isOpen={showSurveyModal} onClose={() => setShowSurveyModal(false)} />
+      </div>
     </div>
   );
 }
@@ -1259,6 +1558,7 @@ function SeguridadPanel({ audits, onRefresh }) {
   );
 }
 
+
 function App() {
   const [page, setPage] = useState("home");
   const [user, setUser] = useState(null);
@@ -1291,15 +1591,19 @@ function App() {
     }
   }
 
-  if (user) return <Dashboard user={user} onLogout={logout} />;
-  if (page === "login") return <LoginPage onLogin={setUser} onBackToHome={() => setPage("home")} />;
-  return <PrivateHome goLogin={() => setPage("login")} />;
+  return (
+    <>
+      <ToastContainer />
+      {user ? (
+        <Dashboard user={user} onLogout={logout} />
+      ) : page === "login" ? (
+        <LoginPage onLogin={setUser} onBackToHome={() => setPage("home")} />
+      ) : (
+        <PrivateHome goLogin={() => setPage("login")} />
+      )}
+    </>
+  );
 }
 
+
 createRoot(document.getElementById("root")).render(<App />);
-
-
-
-
-
-

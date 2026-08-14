@@ -69,6 +69,7 @@ model User {
   distrito     Distrito?  @relation(fields: [distritoId], references: [id])
   audits       Audit[]
   eventosCreados Evento[] @relation("EventosCreados")
+  encuestas    EncuestaSatisfaccion[]
 
   @@index([email])
   @@index([role])
@@ -143,12 +144,15 @@ model Config {
   @@map("config")
 }
 
-// NOTA: Los enums de Postgres (Role, EstadoUser, PresenteEstado, EstadoEvento, ModoAsignacion)
-// se convirtieron a campos String porque SQLite no soporta enums nativos en Prisma.
-// Los valores posibles siguen siendo los mismos, solo que ahora no se validan a nivel de base de datos:
-//
-// Role:           "superadmin" | "regional" | "distrito" | "admin"
-// EstadoUser:     "activo" | "inactivo"
-// PresenteEstado: "presente_votando" | "ausente"
-// EstadoEvento:   "borrador" | "activo" | "cerrado"
-// ModoAsignacion: "individual" | "duplas"
+model EncuestaSatisfaccion {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @map("user_id")
+  puntuacion  Int
+  respuestas  Json
+  comentario  String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("encuestas_satisfaccion")
+}

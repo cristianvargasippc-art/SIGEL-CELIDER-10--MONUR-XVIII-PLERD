@@ -1,8 +1,16 @@
 export function calcularPonderada(calificacion = {}) {
-  const oratoria = Number(calificacion.oratoria || 0) * 0.15 * (100 / 15);
-  const argumentacion = Number(calificacion.argumentacion || 0) * 0.25 * (100 / 25);
-  const negociacion = Number(calificacion.negociacion || 0) * 0.2 * (100 / 20);
-  const liderazgo = Number(calificacion.liderazgo || 0) * 0.15 * (100 / 15);
-  const redaccion = Number(calificacion.redaccion || 0) * 0.25 * (100 / 25);
-  return Number((oratoria + argumentacion + negociacion + liderazgo + redaccion).toFixed(2));
+  const sanitize = (val, maxVal) => {
+    const num = Number(val || 0);
+    if (isNaN(num) || num < 0) return 0;
+    return Math.min(num, maxVal);
+  };
+
+  const oratoria = (sanitize(calificacion.oratoria, 15) / 15) * 15;
+  const argumentacion = (sanitize(calificacion.argumentacion, 25) / 25) * 25;
+  const negociacion = (sanitize(calificacion.negociacion, 20) / 20) * 20;
+  const liderazgo = (sanitize(calificacion.liderazgo, 15) / 15) * 15;
+  const redaccion = (sanitize(calificacion.redaccion, 25) / 25) * 25;
+
+  const total = oratoria + argumentacion + negociacion + liderazgo + redaccion;
+  return Number(total.toFixed(2));
 }

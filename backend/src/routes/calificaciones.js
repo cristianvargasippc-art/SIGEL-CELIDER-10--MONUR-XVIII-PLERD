@@ -9,7 +9,11 @@ import { calificacionesLimiter } from "../middleware/rateLimit.js";
 export const calificacionesRouter = Router();
 
 async function assertCanGrade(user, delegadoId) {
-  const delegado = await prisma.delegado.findUnique({ where: { id: delegadoId }, include: { evento: true } });
+  const cleanId = Number(delegadoId);
+  if (!cleanId || isNaN(cleanId) || cleanId <= 0) {
+    return { error: [400, "Identificador de delegado no válido"] };
+  }
+  const delegado = await prisma.delegado.findUnique({ where: { id: cleanId }, include: { evento: true } });
   if (!delegado) return { error: [404, "Delegado no existe"] };
   if (["distrito", "admin"].includes(user.role) && delegado.evento?.distritoId !== user.distrito_id) {
     return { error: [403, "Delegado fuera de tu distrito"] };
@@ -21,46 +25,62 @@ async function assertCanGrade(user, delegadoId) {
   if (!onlyAttendance && delegado.asistencia === "ausente") {
     return { error: [400, "El delegado ausente no puede ser calificado"] };
   }
-  return { delegado };
+  return { delegado, cleanId };
 }
 
 async function saveCalificacion(req, res, delegadoId, payload) {
-  req.user.payload = payload;
-  const permission = await assertCanGrade(req.user, delegadoId);
-  if (permission.error) return res.status(permission.error[0]).json({ error: permission.error[1] });
+  try {
+    req.user.payload = payload;
+    const permission = await assertCanGrade(req.user, delegadoId);
+    if (permission.error) return res.status(permission.error[0]).json({ error: permission.error[1] });
 
-  const existing = await prisma.calificacion.findUnique({ where: { delegadoId } });
-  const data = {
-    delegadoId,
-    oratoria: payload.oratoria ?? existing?.oratoria,
-    argumentacion: payload.argumentacion ?? existing?.argumentacion,
-    negociacion: payload.negociacion ?? existing?.negociacion,
-    liderazgo: payload.liderazgo ?? existing?.liderazgo,
-    redaccion: payload.redaccion ?? existing?.redaccion,
-    presenteEstado: payload.presente_estado ?? existing?.presenteEstado,
-    pasaMinumeXvii: payload.pasa_minume_xvii ?? existing?.pasaMinumeXvii,
-    mencion: payload.mencion ?? existing?.mencion,
-    feedback: payload.feedback ?? existing?.feedback
-  };
-  data.ponderada = calcularPonderada(data);
+    const cleanId = permission.cleanId;
+    const existing = await prisma.calificacion.findUnique({ where: { delegadoId: cleanId } });
 
-  const saved = await prisma.calificacion.upsert({
-    where: { delegadoId },
-    update: data,
-    create: data
-  });
+    const sanitizeScore = (val, max, fallback) => {
+      if (val === undefined || val === null) return fallback;
+      const num = Number(val);
+      if (isNaN(num) || num < 0) return 0;
+      return Math.min(num, max);
+    };
 
-  await prisma.audit.create({
-    data: {
-      userId: req.user.id,
-      action: existing ? "calificacion_editada" : "calificacion_creada",
-      entityType: "calificacion",
-      entityId: saved.id,
-      changes: { before: existing, after: saved }
-    }
-  });
+    const data = {
+      delegadoId: cleanId,
+      oratoria: sanitizeScore(payload.oratoria, 15, existing?.oratoria ?? null),
+      argumentacion: sanitizeScore(payload.argumentacion, 25, existing?.argumentacion ?? null),
+      negociacion: sanitizeScore(payload.negociacion, 20, existing?.negociacion ?? null),
+      liderazgo: sanitizeScore(payload.liderazgo, 15, existing?.liderazgo ?? null),
+      redaccion: sanitizeScore(payload.redaccion, 25, existing?.redaccion ?? null),
+      presenteEstado: payload.presente_estado ?? existing?.presenteEstado ?? null,
+      pasaMinumeXvii: payload.pasa_minume_xvii ?? existing?.pasaMinumeXvii ?? false,
+      mencion: payload.mencion ? String(payload.mencion).trim() : (existing?.mencion ?? null),
+      feedback: payload.feedback ? String(payload.feedback).trim() : (existing?.feedback ?? null)
+    };
 
-  return res.json(saved);
+    data.ponderada = calcularPonderada(data);
+
+    const saved = await prisma.calificacion.upsert({
+      where: { delegadoId: cleanId },
+      update: data,
+      create: data
+    });
+
+    try {
+      await prisma.audit.create({
+        data: {
+          userId: req.user.id,
+          action: existing ? "calificacion_editada" : "calificacion_creada",
+          entityType: "calificacion",
+          entityId: saved.id,
+          changes: { before: existing, after: saved }
+        }
+      });
+    } catch (_auditErr) {}
+
+    return res.json(saved);
+  } catch (error) {
+    return res.status(400).json({ error: "No se pudo guardar la calificación debido a un formato no válido.", detail: error.message });
+  }
 }
 
 calificacionesRouter.post(
@@ -70,37 +90,60 @@ calificacionesRouter.post(
   calificacionesLimiter,
   validate(calificacionSchema),
   async (req, res) => {
-    return saveCalificacion(req, res, req.body.delegado_id, req.body);
+    try {
+      return await saveCalificacion(req, res, req.body.delegado_id, req.body);
+    } catch (err) {
+      return res.status(400).json({ error: "Error en los datos de calificación enviados.", detail: err.message });
+    }
   }
 );
 
 calificacionesRouter.patch("/:delegadoId", verifyToken, authorize("admin", "superadmin"), calificacionesLimiter, async (req, res) => {
-  const payload = { ...req.body, delegado_id: Number(req.params.delegadoId) };
-  const result = calificacionSchema.partial().required({ delegado_id: true }).safeParse(payload);
-  if (!result.success) {
-    return res.status(400).json({ error: "Datos invalidos", details: result.error.flatten() });
+  try {
+    const rawId = Number(req.params.delegadoId);
+    if (!rawId || isNaN(rawId)) {
+      return res.status(400).json({ error: "ID de delegado no válido." });
+    }
+    const payload = { ...req.body, delegado_id: rawId };
+    const result = calificacionSchema.partial().required({ delegado_id: true }).safeParse(payload);
+    if (!result.success) {
+      return res.status(400).json({ error: "Datos invalidos", details: result.error.flatten() });
+    }
+    return await saveCalificacion(req, res, result.data.delegado_id, result.data);
+  } catch (err) {
+    return res.status(400).json({ error: "Error procesando actualización de calificación.", detail: err.message });
   }
-  return saveCalificacion(req, res, result.data.delegado_id, result.data);
 });
 
 calificacionesRouter.post("/:delegadoId/feedback", verifyToken, authorize("admin", "superadmin"), validate(feedbackSchema), async (req, res) => {
-  const delegadoId = Number(req.params.delegadoId);
-  const permission = await assertCanGrade(req.user, delegadoId);
-  if (permission.error) return res.status(permission.error[0]).json({ error: permission.error[1] });
-
-  await prisma.calificacion.upsert({
-    where: { delegadoId },
-    update: { feedback: req.body.feedback },
-    create: { delegadoId, feedback: req.body.feedback, ponderada: 0 }
-  });
-  await prisma.audit.create({
-    data: {
-      userId: req.user.id,
-      action: "feedback_creado",
-      entityType: "delegado",
-      entityId: delegadoId,
-      changes: { feedback: true }
+  try {
+    const delegadoId = Number(req.params.delegadoId);
+    if (!delegadoId || isNaN(delegadoId)) {
+      return res.status(400).json({ error: "ID de delegado no válido." });
     }
-  });
-  return res.json({ success: true });
+    const permission = await assertCanGrade(req.user, delegadoId);
+    if (permission.error) return res.status(permission.error[0]).json({ error: permission.error[1] });
+
+    await prisma.calificacion.upsert({
+      where: { delegadoId },
+      update: { feedback: String(req.body.feedback).trim() },
+      create: { delegadoId, feedback: String(req.body.feedback).trim(), ponderada: 0 }
+    });
+
+    try {
+      await prisma.audit.create({
+        data: {
+          userId: req.user.id,
+          action: "feedback_creado",
+          entityType: "delegado",
+          entityId: delegadoId,
+          changes: { feedback: true }
+        }
+      });
+    } catch (_auditErr) {}
+
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(400).json({ error: "No se pudo registrar el comentario o feedback.", detail: err.message });
+  }
 });
