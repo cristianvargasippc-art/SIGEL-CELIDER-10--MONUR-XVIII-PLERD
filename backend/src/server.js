@@ -109,6 +109,12 @@ function getCandidateFrontendPaths() {
   if (process.env.PUBLIC_DIR) paths.push(process.env.PUBLIC_DIR);
   if (process.env.STATIC_PATH) paths.push(process.env.STATIC_PATH);
 
+  // Direct paths relative to server.js (__dirname = backend/src)
+  paths.push(join(__dirname, "public"));
+  paths.push(join(__dirname, "dist"));
+  paths.push(join(__dirname, "../public"));
+  paths.push(join(__dirname, "../dist"));
+
   const bases = [__dirname, process.cwd(), join(__dirname, ".."), join(process.cwd(), "..")];
   
   for (const base of bases) {
@@ -123,6 +129,8 @@ function getCandidateFrontendPaths() {
       paths.push(join(curr, "public_html/dist"));
       paths.push(join(curr, "backend/dist"));
       paths.push(join(curr, "backend/public"));
+      paths.push(join(curr, "backend/src/public"));
+      paths.push(join(curr, "backend/src/dist"));
       paths.push(join(curr, "src/dist"));
       paths.push(join(curr, "src/public"));
       const parent = join(curr, "..");

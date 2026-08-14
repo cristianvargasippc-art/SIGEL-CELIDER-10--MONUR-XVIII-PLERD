@@ -22,11 +22,15 @@ try {
   const frontendDist = path.join(__dirname, "..", "frontend", "dist");
   const backendDist = path.join(__dirname, "..", "backend", "dist");
   const backendPublic = path.join(__dirname, "..", "backend", "public");
+  const backendSrcDist = path.join(__dirname, "..", "backend", "src", "dist");
+  const backendSrcPublic = path.join(__dirname, "..", "backend", "src", "public");
 
   if (fs.existsSync(frontendDist)) {
     copyDir(frontendDist, backendDist);
     copyDir(frontendDist, backendPublic);
-    console.log("✅ Frontend dist copiado exitosamente a backend/dist y backend/public");
+    copyDir(frontendDist, backendSrcDist);
+    copyDir(frontendDist, backendSrcPublic);
+    console.log("✅ Frontend dist copiado exitosamente a backend/dist, backend/public, backend/src/dist y backend/src/public");
   } else {
     console.warn("⚠️ frontend/dist no existe aún.");
   }
