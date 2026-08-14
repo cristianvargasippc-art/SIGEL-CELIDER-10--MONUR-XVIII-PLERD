@@ -54,26 +54,23 @@ const allowedOrigins = (process.env.APP_URL || "http://localhost:5173")
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
-      defaultSrc: ["'self'"],
+      defaultSrc: ["'self'", "*"],
       scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      imgSrc: ["'self'", "data:", "https://flagcdn.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      connectSrc: ["'self'", ...allowedOrigins, "http://localhost:3000", "http://localhost:5173"]
+      imgSrc: ["'self'", "data:", "https://flagcdn.com", "*"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+      connectSrc: ["'self'", "*", "http:", "https:"]
     }
   }
 }));
 
 app.use(cors({
   origin(origin, callback) {
-    const cleanOrigin = origin ? origin.trim().replace(/\/$/, "") : null;
-    if (!cleanOrigin || allowedOrigins.includes(cleanOrigin) || cleanOrigin.startsWith("http://localhost:")) {
-      return callback(null, true);
-    }
-    return callback(null, false);
+    return callback(null, true);
   },
   credentials: true
 }));
+app.options("*", cors());
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 

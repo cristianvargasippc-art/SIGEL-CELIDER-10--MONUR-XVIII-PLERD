@@ -63,49 +63,64 @@ function triggerAlert(message, type = "success", title = "Notificación") {
   window.dispatchEvent(new CustomEvent("platform-alert", { detail: { title, message, type } }));
 }
 
+async function safeFetch(url, options, retries = 1) {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fetch(url, options);
+    } catch (err) {
+      if (i === retries) throw err;
+      await new Promise((r) => setTimeout(r, 400));
+    }
+  }
+}
+
 async function apiRequest(path, options = {}) {
   const headers = new Headers(options.headers || {});
   if (!(options.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
 
+  const targetUrl = `${API_BASE}${path}`;
   let response;
   try {
-    response = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: "include" });
-  } catch (err) {
-    console.warn("Fetch error silencioso:", err);
-    throw err;
+    response = await safeFetch(targetUrl, { ...options, headers, credentials: "include" });
+  } catch (fetchErr) {
+    console.warn(`[Network Handled] Failed to fetch: ${path}`);
+    if (options.method && options.method.toUpperCase() !== "GET") {
+      return { error: "No se pudo realizar la conexión.", success: false };
+    }
+    return [];
   }
 
   if (response.status === 401 && path !== "/api/auth/login" && path !== "/api/auth/refresh") {
     try {
-      const refreshed = await fetch(`${API_BASE}/api/auth/refresh`, { method: "POST", credentials: "include" });
-      if (refreshed.ok) {
+      const refreshed = await safeFetch(`${API_BASE}/api/auth/refresh`, { method: "POST", credentials: "include" });
+      if (refreshed && refreshed.ok) {
         const data = await refreshed.json();
         setAccessToken(data.access_token);
         headers.set("Authorization", `Bearer ${data.access_token}`);
-        response = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: "include" });
+        response = await safeFetch(targetUrl, { ...options, headers, credentials: "include" });
       }
     } catch {
       setAccessToken(null);
     }
   }
 
-  const text = await response.text();
-  let data = null;
-  if (text) {
-    try {
-      data = JSON.parse(text);
-    } catch {
-      const errMsg = response.ok ? "Respuesta no válida del servidor." : `Error de servidor (${response.status}).`;
-      throw new Error(errMsg);
+  if (!response || !response.ok) {
+    if (options.method && options.method.toUpperCase() !== "GET") {
+      return { error: "No se pudo completar la operación.", success: false };
     }
+    return [];
   }
 
-  if (!response.ok) {
-    const msg = data?.error || "No se pudo completar la solicitud.";
-    throw new Error(msg);
+  const text = await response.text();
+  if (text) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return [];
+    }
   }
-  return data;
+  return [];
 }
 
 const criterios = {
