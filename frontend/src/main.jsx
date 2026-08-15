@@ -152,7 +152,12 @@ const criterios = {
 };
 
 function ponderada(row) {
-  return Object.entries(criterios).reduce((sum, [key, item]) => sum + ((Number(row[key]) || 0) / item.max) * item.max, 0);
+  return Object.entries(criterios).reduce((sum, [key, item]) => {
+    if (row[key] === "" || row[key] === null || row[key] === undefined) return sum;
+    const value = Number(row[key]);
+    if (!Number.isFinite(value) || value < 0) return sum;
+    return sum + Math.min(value, item.max);
+  }, 0);
 }
 
 function scoreErrorMessage(key) {
@@ -524,8 +529,26 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     }
   }
 
-  async function updateCalificacion(id, key, value) {
+  function updateCalificacion(id, key, value) {
     const raw = String(value ?? "").trim();
+    if (raw === "") {
+      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "" } : d));
+      return;
+    }
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return;
+    const maxVal = criterios[key]?.max ?? 100;
+    if (parsed > maxVal) {
+      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: raw } : d));
+      displayError(new Error(scoreErrorMessage(key)));
+      return;
+    }
+
+    setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: parsed < 0 ? 0 : raw } : d));
+  }
+
+  async function handleGradeBlur(id, key, currentValue) {
+    const raw = String(currentValue ?? "").trim();
     const previous = [...delegados];
     if (raw === "") {
       setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "" } : d));
@@ -537,35 +560,21 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
       }
       return;
     }
-    let parsed = parseInt(raw, 10);
-    if (!Number.isFinite(parsed)) return;
-    if (parsed < 0) parsed = 0;
     const maxVal = criterios[key]?.max ?? 100;
-    if (parsed > maxVal) {
-      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: raw } : d));
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return;
+    if (Number.isFinite(parsed) && parsed > maxVal) {
       displayError(new Error(scoreErrorMessage(key)));
       return;
     }
 
-    setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: parsed } : d));
+    const cleanValue = Math.max(0, Math.trunc(parsed));
+    setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: cleanValue } : d));
     try {
-      await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: parsed }) });
+      await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: cleanValue }) });
     } catch (error) {
       setDelegados(previous);
       displayError(error);
-    }
-  }
-
-  function handleGradeBlur(id, key, currentValue) {
-    const raw = String(currentValue ?? "").trim();
-    if (raw === "") {
-      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "" } : d));
-      return;
-    }
-    const maxVal = criterios[key]?.max ?? 100;
-    const parsed = Number(raw);
-    if (Number.isFinite(parsed) && parsed > maxVal) {
-      displayError(new Error(scoreErrorMessage(key)));
     }
   }
 

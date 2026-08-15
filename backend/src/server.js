@@ -4,7 +4,7 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+import { basename, dirname, join } from "path";
 import { existsSync } from "fs";
 import { adminsRouter } from "./routes/admins.js";
 import { auditRouter } from "./routes/audit.js";
@@ -50,27 +50,44 @@ const allowedOrigins = (process.env.APP_URL || "http://localhost:5173")
   .split(",")
   .map((origin) => origin.trim().replace(/\/$/, ""))
   .filter(Boolean);
+const allowedOriginSet = new Set(allowedOrigins);
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  try {
+    const normalized = new URL(origin).origin.replace(/\/$/, "");
+    return allowedOriginSet.has(normalized);
+  } catch {
+    return false;
+  }
+}
+
+const corsOptions = {
+  origin(origin, callback) {
+    if (isAllowedOrigin(origin)) return callback(null, true);
+    return callback(new Error("Origen no permitido por CORS"));
+  },
+  credentials: true
+};
 
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
-      defaultSrc: ["'self'", "*"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      imgSrc: ["'self'", "data:", "https://flagcdn.com", "*"],
+      imgSrc: ["'self'", "data:", "https://flagcdn.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-      connectSrc: ["'self'", "*", "http:", "https:"]
+      connectSrc: ["'self'", ...allowedOrigins],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      frameAncestors: ["'none'"]
     }
   }
 }));
 
-app.use(cors({
-  origin(origin, callback) {
-    return callback(null, true);
-  },
-  credentials: true
-}));
-app.options("*", cors());
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 
@@ -140,22 +157,23 @@ function getCandidateFrontendPaths() {
 function resolveFrontendPath() {
   const candidates = getCandidateFrontendPaths();
   for (const p of candidates) {
-    if (existsSync(join(p, "index.html"))) {
+    const folderName = basename(p).toLowerCase();
+    const allowedStaticFolder = ["dist", "public", "public_html"].includes(folderName);
+    if (allowedStaticFolder && existsSync(join(p, "index.html"))) {
       return p;
     }
   }
   return candidates[0] || join(__dirname, "../dist");
 }
 
-const candidatePaths = getCandidateFrontendPaths();
-candidatePaths.forEach((p) => {
-  if (existsSync(p)) {
-    app.use(express.static(p));
-  }
-});
-
 const frontendPath = resolveFrontendPath();
-app.use(express.static(frontendPath));
+app.use(express.static(frontendPath, {
+  dotfiles: "ignore",
+  etag: true,
+  fallthrough: true,
+  index: false
+}));
+const candidatePaths = [];
 
 app.get("*", (_req, res) => {
   const activePath = resolveFrontendPath();
@@ -200,9 +218,8 @@ app.use((err, _req, res, _next) => {
   logger.error("Unhandled error", { error: err.message, stack: err.stack });
   return res.status(500).json({
     error: "Ocurrió una eventualidad en la plataforma. Se ha emitido una notificación de alerta.",
-    detail: err.message,
     alert: true,
-    code: err.code || null
+    ...(process.env.NODE_ENV !== "production" ? { detail: err.message, code: err.code || null } : {})
   });
 });
 
