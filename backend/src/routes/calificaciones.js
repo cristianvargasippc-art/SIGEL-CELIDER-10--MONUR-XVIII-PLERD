@@ -37,20 +37,26 @@ async function saveCalificacion(req, res, delegadoId, payload) {
     const cleanId = permission.cleanId;
     const existing = await prisma.calificacion.findUnique({ where: { delegadoId: cleanId } });
 
-    const sanitizeScore = (val, max, fallback) => {
-      if (val === undefined || val === null) return fallback;
+    const sanitizeScore = (val, max, fallback, label) => {
+      if (val === undefined) return fallback;
+      if (val === null || val === "") return null;
       const num = Number(val);
-      if (isNaN(num) || num < 0) return 0;
-      return Math.min(num, max);
+      if (!Number.isFinite(num) || num < 0) {
+        throw new Error(`${label} debe ser un numero entre 0 y ${max}.`);
+      }
+      if (num > max) {
+        throw new Error(`${label} no puede pasar de ${max} puntos.`);
+      }
+      return num;
     };
 
     const data = {
       delegadoId: cleanId,
-      oratoria: sanitizeScore(payload.oratoria, 15, existing?.oratoria ?? null),
-      argumentacion: sanitizeScore(payload.argumentacion, 25, existing?.argumentacion ?? null),
-      negociacion: sanitizeScore(payload.negociacion, 20, existing?.negociacion ?? null),
-      liderazgo: sanitizeScore(payload.liderazgo, 15, existing?.liderazgo ?? null),
-      redaccion: sanitizeScore(payload.redaccion, 25, existing?.redaccion ?? null),
+      oratoria: sanitizeScore(payload.oratoria, 15, existing?.oratoria ?? null, "Oratoria"),
+      argumentacion: sanitizeScore(payload.argumentacion, 25, existing?.argumentacion ?? null, "Argumentacion"),
+      negociacion: sanitizeScore(payload.negociacion, 20, existing?.negociacion ?? null, "Negociacion"),
+      liderazgo: sanitizeScore(payload.liderazgo, 15, existing?.liderazgo ?? null, "Liderazgo"),
+      redaccion: sanitizeScore(payload.redaccion, 25, existing?.redaccion ?? null, "Redaccion"),
       presenteEstado: payload.presente_estado ?? existing?.presenteEstado ?? null,
       pasaMinumeXvii: payload.pasa_minume_xvii ?? existing?.pasaMinumeXvii ?? false,
       mencion: payload.mencion ? String(payload.mencion).trim() : (existing?.mencion ?? null),
@@ -107,7 +113,10 @@ calificacionesRouter.patch("/:delegadoId", verifyToken, authorize("admin", "supe
     const payload = { ...req.body, delegado_id: rawId };
     const result = calificacionSchema.partial().required({ delegado_id: true }).safeParse(payload);
     if (!result.success) {
-      return res.status(400).json({ error: "Datos invalidos", details: result.error.flatten() });
+      return res.status(400).json({
+        error: result.error.issues?.[0]?.message || "Datos invalidos",
+        details: result.error.flatten()
+      });
     }
     return await saveCalificacion(req, res, result.data.delegado_id, result.data);
   } catch (err) {

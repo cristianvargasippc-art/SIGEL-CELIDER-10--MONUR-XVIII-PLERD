@@ -5,7 +5,14 @@ import { prisma } from "../db.js";
 import { loginSchema } from "../schemas.js";
 import { validate } from "../middleware/validate.js";
 import { verifyToken } from "../middleware/auth.js";
-import { loginLimiter, checkLoginAttempts, recordFailedAttempt, clearLoginAttempts } from "../middleware/rateLimit.js";
+import {
+  loginLimiter,
+  checkLoginAttempts,
+  recordFailedAttempt,
+  clearLoginAttempts,
+  loginRateLimitConfig,
+  loginRateLimitMessage
+} from "../middleware/rateLimit.js";
 
 export const authRouter = Router();
 
@@ -27,7 +34,7 @@ authRouter.post("/login", loginLimiter, validate(loginSchema), async (req, res) 
         }
       });
       return res.status(429).json({
-        error: `Acceso bloqueado por seguridad. Has alcanzado el límite de 5 intentos fallidos. Debes esperar ${check.retryAfter} minuto(s) para volverlo a intentar.`
+        error: loginRateLimitMessage(check.retryAfter)
       });
     }
 
@@ -46,11 +53,11 @@ authRouter.post("/login", loginLimiter, validate(loginSchema), async (req, res) 
       });
       if (newCheck.blocked) {
         return res.status(429).json({
-          error: `Acceso bloqueado por seguridad. Has alcanzado el límite de 5 intentos fallidos. Debes esperar ${newCheck.retryAfter} minuto(s) para volverlo a intentar.`
+          error: loginRateLimitMessage(newCheck.retryAfter)
         });
       }
       return res.status(401).json({
-        error: `Acceso denegado: El usuario no existe o no tiene permiso de ingreso. Te quedan ${newCheck.remaining} intento(s) de acceso.`
+        error: `Credenciales incorrectas. Te quedan ${newCheck.remaining} intento(s). Si se alcanza el limite de ${loginRateLimitConfig.maxAttempts}, intente mas tarde despues de ${loginRateLimitConfig.windowMinutes} minutos.`
       });
     }
 
@@ -69,11 +76,11 @@ authRouter.post("/login", loginLimiter, validate(loginSchema), async (req, res) 
       });
       if (newCheck.blocked) {
         return res.status(429).json({
-          error: `Acceso bloqueado por seguridad. Se registraron múltiples intentos fallidos. Debes esperar ${newCheck.retryAfter} minuto(s) para intentar nuevamente.`
+          error: loginRateLimitMessage(newCheck.retryAfter)
         });
       }
       return res.status(401).json({
-        error: `Acceso denegado: Contraseña incorrecta. Te quedan ${newCheck.remaining} intento(s) antes del bloqueo temporal.`
+        error: `Credenciales incorrectas. Te quedan ${newCheck.remaining} intento(s). Si se alcanza el limite de ${loginRateLimitConfig.maxAttempts}, intente mas tarde despues de ${loginRateLimitConfig.windowMinutes} minutos.`
       });
     }
 

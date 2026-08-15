@@ -1,6 +1,7 @@
 export function calcularPonderada(calificacion = {}) {
   const sanitize = (val, maxVal) => {
-    const num = Number(val || 0);
+    if (val === null || val === undefined || val === "") return 0;
+    const num = Number(val);
     if (isNaN(num) || num < 0) return 0;
     return Math.min(num, maxVal);
   };

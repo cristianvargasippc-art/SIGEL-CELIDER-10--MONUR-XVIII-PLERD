@@ -88,7 +88,7 @@ async function apiRequest(path, options = {}) {
       throw new Error("No se pudo conectar con el servidor de autenticación.");
     }
     if (options.method && options.method.toUpperCase() !== "GET") {
-      return { error: "No se pudo realizar la conexión.", success: false };
+      throw new Error("No se pudo realizar la conexion con el servidor.");
     }
     return [];
   }
@@ -120,8 +120,14 @@ async function apiRequest(path, options = {}) {
   }
 
   if (!response || !response.ok) {
+    const text = response ? await response.text() : "";
+    let data = null;
+    if (text) {
+      try { data = JSON.parse(text); } catch {}
+    }
+    const message = data?.error || data?.detail || "No se pudo completar la operacion.";
     if (options.method && options.method.toUpperCase() !== "GET") {
-      return { error: "No se pudo completar la operación.", success: false };
+      throw new Error(message);
     }
     return [];
   }
@@ -147,6 +153,12 @@ const criterios = {
 
 function ponderada(row) {
   return Object.entries(criterios).reduce((sum, [key, item]) => sum + ((Number(row[key]) || 0) / item.max) * item.max, 0);
+}
+
+function scoreErrorMessage(key) {
+  const criterio = criterios[key];
+  if (!criterio) return "La calificacion enviada no es valida.";
+  return `${criterio.label} no puede pasar de ${criterio.max} puntos. Corrige el valor para guardar.`;
 }
 
 function mapDelegado(row) {
@@ -514,11 +526,11 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
 
   async function updateCalificacion(id, key, value) {
     const raw = String(value ?? "").trim();
+    const previous = [...delegados];
     if (raw === "") {
-      const previous = [...delegados];
       setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "" } : d));
       try {
-        await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: 0 }) });
+        await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: null }) });
       } catch (error) {
         setDelegados(previous);
         displayError(error);
@@ -529,9 +541,12 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     if (!Number.isFinite(parsed)) return;
     if (parsed < 0) parsed = 0;
     const maxVal = criterios[key]?.max ?? 100;
-    if (parsed > maxVal) parsed = maxVal;
+    if (parsed > maxVal) {
+      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: raw } : d));
+      displayError(new Error(scoreErrorMessage(key)));
+      return;
+    }
 
-    const previous = [...delegados];
     setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: parsed } : d));
     try {
       await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: parsed }) });
@@ -542,9 +557,15 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
   }
 
   function handleGradeBlur(id, key, currentValue) {
-    if (String(currentValue ?? "").trim() === "") {
-      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: 0 } : d));
-      apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: 0 }) }).catch(console.error);
+    const raw = String(currentValue ?? "").trim();
+    if (raw === "") {
+      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "" } : d));
+      return;
+    }
+    const maxVal = criterios[key]?.max ?? 100;
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed > maxVal) {
+      displayError(new Error(scoreErrorMessage(key)));
     }
   }
 
@@ -941,7 +962,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
                           max={criterios[key].max}
                           step="1"
                           inputMode="numeric"
-                          placeholder="0"
+                          placeholder="-"
                           value={d[key]}
                           onChange={(e) => updateCalificacion(d.id, key, e.target.value)}
                           onBlur={(e) => handleGradeBlur(d.id, key, e.target.value)}
@@ -1485,8 +1506,9 @@ function Dashboard({ user, onLogout }) {
               <section className="welcome-header-card">
                 <div className="welcome-greeting-row">
                   <div>
-                    <h1 className="welcome-title">Hola, Bienvenido/a de nuevo {userName} 👋</h1>
-                    <p style={{ marginTop: 4 }}>Panel Institucional de Gestión y Calificación CELIDER 10 - Regional 10</p>
+                    <span className="dashboard-kicker">Panel institucional</span>
+                    <h1 className="welcome-title">Bienvenido/a, {userName}</h1>
+                    <p style={{ marginTop: 4 }}>Gestiona eventos, asistencia, usuarios y evaluaciones de CELIDER 10 con control por roles.</p>
                   </div>
                   <button className="btn primary" onClick={() => setShowSurveyModal(true)}>
                     <Star size={16} fill="#ffffff" /> Llenar Encuesta Opcional

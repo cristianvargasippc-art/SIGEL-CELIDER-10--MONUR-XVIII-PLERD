@@ -7,11 +7,11 @@ export const loginSchema = z.object({
 
 export const calificacionSchema = z.object({
   delegado_id: z.number().int().positive(),
-  oratoria: z.number().int().min(0).max(15).nullable().optional(),
-  argumentacion: z.number().int().min(0).max(25).nullable().optional(),
-  negociacion: z.number().int().min(0).max(20).nullable().optional(),
-  liderazgo: z.number().int().min(0).max(15).nullable().optional(),
-  redaccion: z.number().int().min(0).max(25).nullable().optional(),
+  oratoria: z.number().int().min(0, "Oratoria no puede ser negativa.").max(15, "Oratoria no puede pasar de 15 puntos.").nullable().optional(),
+  argumentacion: z.number().int().min(0, "Argumentacion no puede ser negativa.").max(25, "Argumentacion no puede pasar de 25 puntos.").nullable().optional(),
+  negociacion: z.number().int().min(0, "Negociacion no puede ser negativa.").max(20, "Negociacion no puede pasar de 20 puntos.").nullable().optional(),
+  liderazgo: z.number().int().min(0, "Liderazgo no puede ser negativo.").max(15, "Liderazgo no puede pasar de 15 puntos.").nullable().optional(),
+  redaccion: z.number().int().min(0, "Redaccion no puede ser negativa.").max(25, "Redaccion no puede pasar de 25 puntos.").nullable().optional(),
   presente_estado: z.enum(["presente_votando", "ausente"]).optional(),
   pasa_minume_xvii: z.boolean().optional(),
   mencion: z.string().max(500).optional(),

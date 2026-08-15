@@ -7,6 +7,16 @@ const redis = hasRedis ? Redis.fromEnv() : null;
 const loginAttempts = new Map();
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000;
+const WINDOW_MINUTES = Math.ceil(WINDOW_MS / 1000 / 60);
+
+export const loginRateLimitConfig = {
+  maxAttempts: MAX_ATTEMPTS,
+  windowMinutes: WINDOW_MINUTES
+};
+
+export function loginRateLimitMessage(retryAfter = WINDOW_MINUTES) {
+  return `Inicio de sesion bloqueado por intentos incorrectos. Intente mas tarde, despues de ${retryAfter} minuto(s).`;
+}
 
 export function checkLoginAttempts(key) {
   const now = Date.now();
@@ -46,7 +56,7 @@ function limiter(ratelimit, keyFactory) {
   return async (req, res, next) => {
     const key = keyFactory(req);
     const { success } = await ratelimit.limit(key);
-    if (!success) return res.status(429).json({ error: "Demasiadas solicitudes. Intente nuevamente en 15 minutos." });
+    if (!success) return res.status(429).json({ error: loginRateLimitMessage(WINDOW_MINUTES) });
     return next();
   };
 }
