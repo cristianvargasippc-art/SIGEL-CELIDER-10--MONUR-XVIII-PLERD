@@ -33,7 +33,8 @@ import "./home.css";
 import { getFlag } from "./utils/flags";
 
 const LOGO_SRC = "/imagenes/logo.png";
-const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/api\/?$/, "").replace(/\/$/, "");
+const API_ORIGIN = (import.meta.env.VITE_API_URL || "").replace(/\/api\/?$/, "").replace(/\/$/, "");
+const API_BASE = API_ORIGIN ? `${API_ORIGIN}/api` : "/api";
 const DISTRITOS = ["10-01", "10-02", "10-03", "10-04", "10-05", "10-06", "10-07"];
 const PAISES = [
   "Afganistán", "Albania", "Alemania", "Andorra", "Angola", "Antigua y Barbuda", "Arabia Saudita", "Argelia", "Argentina", "Armenia", "Australia", "Austria", "Azerbaiyán",
@@ -79,7 +80,8 @@ async function apiRequest(path, options = {}) {
   if (!(options.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
 
-  const targetUrl = `${API_BASE}${path}`;
+  const normalizedPath = path.startsWith("/api/") ? path.slice(4) : path;
+  const targetUrl = `${API_BASE}${normalizedPath}`;
   let response;
   try {
     response = await safeFetch(targetUrl, { ...options, headers, credentials: "include" });
@@ -107,7 +109,7 @@ async function apiRequest(path, options = {}) {
 
   if (response.status === 401 && path !== "/api/auth/refresh") {
     try {
-      const refreshed = await safeFetch(`${API_BASE}/api/auth/refresh`, { method: "POST", credentials: "include" });
+      const refreshed = await safeFetch(`${API_BASE}/auth/refresh`, { method: "POST", credentials: "include" });
       if (refreshed && refreshed.ok) {
         const data = await refreshed.json();
         setAccessToken(data.access_token);
