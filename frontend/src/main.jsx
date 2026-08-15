@@ -84,14 +84,28 @@ async function apiRequest(path, options = {}) {
   try {
     response = await safeFetch(targetUrl, { ...options, headers, credentials: "include" });
   } catch (fetchErr) {
-    console.warn(`[Network Handled] Failed to fetch: ${path}`);
+    if (path === "/api/auth/login") {
+      throw new Error("No se pudo conectar con el servidor de autenticación.");
+    }
     if (options.method && options.method.toUpperCase() !== "GET") {
       return { error: "No se pudo realizar la conexión.", success: false };
     }
     return [];
   }
 
-  if (response.status === 401 && path !== "/api/auth/login" && path !== "/api/auth/refresh") {
+  if (path === "/api/auth/login") {
+    const text = await response.text();
+    let data = null;
+    if (text) {
+      try { data = JSON.parse(text); } catch {}
+    }
+    if (!response.ok) {
+      throw new Error(data?.error || "Acceso denegado: Usuario no existe o credenciales incorrectas.");
+    }
+    return data;
+  }
+
+  if (response.status === 401 && path !== "/api/auth/refresh") {
     try {
       const refreshed = await safeFetch(`${API_BASE}/api/auth/refresh`, { method: "POST", credentials: "include" });
       if (refreshed && refreshed.ok) {

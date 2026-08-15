@@ -4,41 +4,38 @@ import { Redis } from "@upstash/redis";
 const hasRedis = Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
 const redis = hasRedis ? Redis.fromEnv() : null;
 
-// ── In-memory fallback for login rate limiting ──────────────────────────────
-// Tracks failed login attempts per IP when Redis is not available.
-const loginAttempts = new Map(); // ip → { count: number, windowStart: Date }
+const loginAttempts = new Map();
 const MAX_ATTEMPTS = 5;
-const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const WINDOW_MS = 15 * 60 * 1000;
 
-export function checkLoginAttempts(ip) {
+export function checkLoginAttempts(key) {
   const now = Date.now();
-  const record = loginAttempts.get(ip);
+  const record = loginAttempts.get(key);
   if (!record) return { blocked: false, remaining: MAX_ATTEMPTS };
   if (now - record.windowStart > WINDOW_MS) {
-    loginAttempts.delete(ip);
+    loginAttempts.delete(key);
     return { blocked: false, remaining: MAX_ATTEMPTS };
   }
   if (record.count >= MAX_ATTEMPTS) {
     const retryAfter = Math.ceil((record.windowStart + WINDOW_MS - now) / 1000 / 60);
-    return { blocked: true, retryAfter };
+    return { blocked: true, retryAfter: Math.max(1, retryAfter) };
   }
-  return { blocked: false, remaining: MAX_ATTEMPTS - record.count };
+  return { blocked: false, remaining: Math.max(0, MAX_ATTEMPTS - record.count) };
 }
 
-export function recordFailedAttempt(ip) {
+export function recordFailedAttempt(key) {
   const now = Date.now();
-  const record = loginAttempts.get(ip);
+  const record = loginAttempts.get(key);
   if (!record || now - record.windowStart > WINDOW_MS) {
-    loginAttempts.set(ip, { count: 1, windowStart: now });
+    loginAttempts.set(key, { count: 1, windowStart: now });
   } else {
     record.count += 1;
   }
 }
 
-export function clearLoginAttempts(ip) {
-  loginAttempts.delete(ip);
+export function clearLoginAttempts(key) {
+  loginAttempts.delete(key);
 }
-// ─────────────────────────────────────────────────────────────────────────────
 
 function passthrough() {
   return async (_req, _res, next) => next();

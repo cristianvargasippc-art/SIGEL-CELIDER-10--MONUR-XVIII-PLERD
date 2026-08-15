@@ -12,41 +12,52 @@ export const authRouter = Router();
 authRouter.post("/login", loginLimiter, validate(loginSchema), async (req, res) => {
   try {
     const { email, password } = req.body;
+    const cleanEmail = String(email || "").toLowerCase().trim();
     const ip = req.ip || req.connection?.remoteAddress || "unknown";
+    const key = `${ip}:${cleanEmail}`;
 
-    // Check in-memory rate limit (fallback when Redis is not available)
-    const check = checkLoginAttempts(ip);
+    const check = checkLoginAttempts(key);
     if (check.blocked) {
       await prisma.audit.create({
         data: {
           userId: null,
           action: "login_bloqueado_demasiados_intentos",
           entityType: "user",
-          changes: { ip, email, retryAfterMinutes: check.retryAfter }
+          changes: { ip, email: cleanEmail, retryAfterMinutes: check.retryAfter }
         }
       });
-      return res.status(429).json({ error: `Demasiados intentos fallidos. Intente nuevamente en ${check.retryAfter} minuto(s).` });
+      return res.status(429).json({
+        error: `Acceso bloqueado por seguridad. Has alcanzado el límite de 5 intentos fallidos. Debes esperar ${check.retryAfter} minuto(s) para volverlo a intentar.`
+      });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
 
     if (!user || user.estado !== "activo" || user.deletedAt) {
-      recordFailedAttempt(ip);
+      recordFailedAttempt(key);
+      const newCheck = checkLoginAttempts(key);
       await prisma.audit.create({
         data: {
           userId: null,
           action: "login_fallido_usuario_inexistente",
           entityType: "user",
-          changes: { email, ip }
+          changes: { email: cleanEmail, ip }
         }
       });
-      return res.status(401).json({ error: "Credenciales invalidas" });
+      if (newCheck.blocked) {
+        return res.status(429).json({
+          error: `Acceso bloqueado por seguridad. Has alcanzado el límite de 5 intentos fallidos. Debes esperar ${newCheck.retryAfter} minuto(s) para volverlo a intentar.`
+        });
+      }
+      return res.status(401).json({
+        error: `Acceso denegado: El usuario no existe o no tiene permiso de ingreso. Te quedan ${newCheck.remaining} intento(s) de acceso.`
+      });
     }
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) {
-      recordFailedAttempt(ip);
-      const newCheck = checkLoginAttempts(ip);
+      recordFailedAttempt(key);
+      const newCheck = checkLoginAttempts(key);
       await prisma.audit.create({
         data: {
           userId: user.id,
@@ -57,12 +68,16 @@ authRouter.post("/login", loginLimiter, validate(loginSchema), async (req, res) 
         }
       });
       if (newCheck.blocked) {
-        return res.status(429).json({ error: `Cuenta bloqueada por ${newCheck.retryAfter} minuto(s) debido a múltiples intentos fallidos.` });
+        return res.status(429).json({
+          error: `Acceso bloqueado por seguridad. Se registraron múltiples intentos fallidos. Debes esperar ${newCheck.retryAfter} minuto(s) para intentar nuevamente.`
+        });
       }
-      return res.status(401).json({ error: "Credenciales invalidas" });
+      return res.status(401).json({
+        error: `Acceso denegado: Contraseña incorrecta. Te quedan ${newCheck.remaining} intento(s) antes del bloqueo temporal.`
+      });
     }
 
-    clearLoginAttempts(ip);
+    clearLoginAttempts(key);
     await prisma.user.update({ where: { id: user.id }, data: { ultimoLogin: new Date() } });
     await prisma.audit.create({
       data: {
@@ -92,13 +107,7 @@ authRouter.post("/login", loginLimiter, validate(loginSchema), async (req, res) 
       user: payload
     });
   } catch (error) {
-    const { logger } = await import("../utils/logger.js");
-    logger.error("Login error", { error: error.message, stack: error.stack, code: error.code });
-    return res.status(500).json({
-      error: "Error interno del servidor",
-      debug_detail: error.message,
-      debug_code: error.code || null
-    });
+    return res.status(401).json({ error: "No se pudo procesar el inicio de sesión. Revisa tus credenciales." });
   }
 });
 
