@@ -168,6 +168,10 @@ function scoreErrorMessage(key) {
   return `${criterio.label} no puede pasar de ${criterio.max} puntos. Corrige el valor para guardar.`;
 }
 
+function hasTooManyDecimals(value) {
+  return !/^\d+(\.\d{0,2})?$/.test(String(value));
+}
+
 function mapDelegado(row) {
   const cal = row.calificacion || {};
   const feedbackEtapa = cal.feedback?.startsWith("etapa:") ? cal.feedback.replace("etapa:", "") : null;
@@ -538,7 +542,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
       return;
     }
     const parsed = Number(raw);
-    if (!Number.isFinite(parsed)) return;
+    if (!Number.isFinite(parsed) || hasTooManyDecimals(raw)) return;
     const maxVal = criterios[key]?.max ?? 100;
     if (parsed > maxVal) {
       setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: raw } : d));
@@ -565,12 +569,16 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     const maxVal = criterios[key]?.max ?? 100;
     const parsed = Number(raw);
     if (!Number.isFinite(parsed)) return;
+    if (hasTooManyDecimals(raw)) {
+      displayError(new Error("Solo se permiten hasta dos decimales."));
+      return;
+    }
     if (Number.isFinite(parsed) && parsed > maxVal) {
       displayError(new Error(scoreErrorMessage(key)));
       return;
     }
 
-    const cleanValue = Math.max(0, Math.trunc(parsed));
+    const cleanValue = Number(Math.max(0, parsed).toFixed(2));
     setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: cleanValue } : d));
     try {
       await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: cleanValue }) });
@@ -897,7 +905,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
           <div className="section-heading compact" style={{ marginTop: "28px" }}>
             <span>Paso 4</span>
             <h2>Calificaciones</h2>
-            <p>Evaluación de delegados presentes. Los ausentes no aparecen aquí. <strong>* Nota: Solo se permiten cantidades enteras (sin decimales).</strong></p>
+            <p>Evaluación de delegados presentes. Los ausentes no aparecen aquí. Puedes usar hasta dos decimales; se recomienda usar un decimal cuando sea suficiente, por ejemplo 12.5.</p>
           </div>
 
           {presentes.length > 0 && (
@@ -971,8 +979,8 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
                           type="number"
                           min="0"
                           max={criterios[key].max}
-                          step="1"
-                          inputMode="numeric"
+                          step="0.01"
+                          inputMode="decimal"
                           placeholder="-"
                           value={d[key]}
                           onChange={(e) => updateCalificacion(d.id, key, e.target.value)}

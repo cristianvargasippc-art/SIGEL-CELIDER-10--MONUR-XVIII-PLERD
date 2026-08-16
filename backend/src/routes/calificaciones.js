@@ -47,7 +47,10 @@ async function saveCalificacion(req, res, delegadoId, payload) {
       if (num > max) {
         throw new Error(`${label} no puede pasar de ${max} puntos.`);
       }
-      return num;
+      if (Math.abs(num * 100 - Math.round(num * 100)) >= 1e-9) {
+        throw new Error(`${label} puede tener hasta dos decimales.`);
+      }
+      return Number(num.toFixed(2));
     };
 
     const data = {

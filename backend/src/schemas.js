@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const hasAtMostTwoDecimals = (num) => Math.abs(num * 100 - Math.round(num * 100)) < 1e-9;
+
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8)
@@ -7,11 +9,11 @@ export const loginSchema = z.object({
 
 export const calificacionSchema = z.object({
   delegado_id: z.number().int().positive(),
-  oratoria: z.number().int().min(0, "Oratoria no puede ser negativa.").max(15, "Oratoria no puede pasar de 15 puntos.").nullable().optional(),
-  argumentacion: z.number().int().min(0, "Argumentacion no puede ser negativa.").max(25, "Argumentacion no puede pasar de 25 puntos.").nullable().optional(),
-  negociacion: z.number().int().min(0, "Negociacion no puede ser negativa.").max(20, "Negociacion no puede pasar de 20 puntos.").nullable().optional(),
-  liderazgo: z.number().int().min(0, "Liderazgo no puede ser negativo.").max(15, "Liderazgo no puede pasar de 15 puntos.").nullable().optional(),
-  redaccion: z.number().int().min(0, "Redaccion no puede ser negativa.").max(25, "Redaccion no puede pasar de 25 puntos.").nullable().optional(),
+  oratoria: z.number().min(0, "Oratoria no puede ser negativa.").max(15, "Oratoria no puede pasar de 15 puntos.").refine(hasAtMostTwoDecimals, "Oratoria puede tener hasta dos decimales.").nullable().optional(),
+  argumentacion: z.number().min(0, "Argumentacion no puede ser negativa.").max(25, "Argumentacion no puede pasar de 25 puntos.").refine(hasAtMostTwoDecimals, "Argumentacion puede tener hasta dos decimales.").nullable().optional(),
+  negociacion: z.number().min(0, "Negociacion no puede ser negativa.").max(20, "Negociacion no puede pasar de 20 puntos.").refine(hasAtMostTwoDecimals, "Negociacion puede tener hasta dos decimales.").nullable().optional(),
+  liderazgo: z.number().min(0, "Liderazgo no puede ser negativo.").max(15, "Liderazgo no puede pasar de 15 puntos.").refine(hasAtMostTwoDecimals, "Liderazgo puede tener hasta dos decimales.").nullable().optional(),
+  redaccion: z.number().min(0, "Redaccion no puede ser negativa.").max(25, "Redaccion no puede pasar de 25 puntos.").refine(hasAtMostTwoDecimals, "Redaccion puede tener hasta dos decimales.").nullable().optional(),
   presente_estado: z.enum(["presente_votando", "ausente"]).optional(),
   pasa_minume_xvii: z.boolean().optional(),
   mencion: z.string().max(500).optional(),

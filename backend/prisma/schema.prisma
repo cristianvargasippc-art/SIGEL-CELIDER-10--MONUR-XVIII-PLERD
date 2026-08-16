@@ -101,11 +101,11 @@ model Delegado {
 model Calificacion {
   id              Int             @id @default(autoincrement())
   delegadoId      Int             @unique @map("delegado_id")
-  oratoria        Int?
-  argumentacion   Int?
-  negociacion     Int?
-  liderazgo       Int?
-  redaccion       Int?
+  oratoria        Float?
+  argumentacion   Float?
+  negociacion     Float?
+  liderazgo       Float?
+  redaccion       Float?
   ponderada       Float           @default(0)
   presenteEstado  String?         @map("presente_estado")
   pasaMinumeXvii  Boolean?        @map("pasa_minume_xvii")
