@@ -407,6 +407,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
   const [view, setView] = useState(initialView);
   const [filtroCalificaciones, setFiltroCalificaciones] = useState("");
   const pendingGradeDeletesRef = useRef(new Set());
+  const pendingGradeChangesRef = useRef(new Map());
   const canManageEvent = ["superadmin", "distrito"].includes(user?.role);
   const canTakeAttendance = canManageEvent;
 
@@ -554,35 +555,32 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     if (raw === "") {
       setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "" } : d));
       pendingGradeDeletesRef.current.delete(`${id}:${key}`);
+      pendingGradeChangesRef.current.delete(`${id}:${key}`);
       persistEmptyCalificacion(id, key);
       return;
     }
     pendingGradeDeletesRef.current.delete(`${id}:${key}`);
     const parsed = Number(raw);
-    if (!Number.isFinite(parsed)) {
-      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "" } : d));
-      return;
-    }
-    if (hasTooManyDecimals(raw)) {
-      const maxVal = criterios[key]?.max ?? 100;
-      if (parsed > maxVal || parsed < 0) {
-        const clamped = Math.max(0, Math.min(maxVal, parsed));
-        const rounded = Number(clamped.toFixed(2));
-        setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: rounded } : d));
-      }
-      displayError(new Error(scoreErrorMessage(key)));
-      return;
-    }
+    if (!Number.isFinite(parsed)) return;
+
     const maxVal = criterios[key]?.max ?? 100;
     if (parsed > maxVal || parsed < 0) {
       const clamped = Math.max(0, Math.min(maxVal, parsed));
       const rounded = Number(clamped.toFixed(2));
       setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: rounded } : d));
+      pendingGradeChangesRef.current.set(`${id}:${key}`, rounded);
       displayError(new Error(scoreErrorMessage(key)));
       return;
     }
+    if (hasTooManyDecimals(raw)) {
+      displayError(new Error(scoreErrorMessage(key)));
+      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: raw } : d));
+      return;
+    }
 
+    const cleanValue = Number(Math.max(0, parsed).toFixed(2));
     setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: parsed < 0 ? "0" : raw } : d));
+    pendingGradeChangesRef.current.set(`${id}:${key}`, cleanValue);
   }
 
   async function persistEmptyCalificacion(id, key) {
@@ -595,41 +593,34 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     } catch (error) {
       pendingGradeDeletesRef.current.delete(fieldKey);
       displayError(error);
-      await load();
     }
   }
 
   async function handleGradeBlur(id, key, currentValue) {
     const raw = String(currentValue ?? "").trim();
-    const previous = [...delegados];
+    const fieldKey = `${id}:${key}`;
+
     if (raw === "") {
       setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "" } : d));
-      const fieldKey = `${id}:${key}`;
       if (pendingGradeDeletesRef.current.has(fieldKey)) return;
+      pendingGradeDeletesRef.current.add(fieldKey);
       try {
         await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: null }) });
         pendingGradeDeletesRef.current.delete(fieldKey);
+        pendingGradeChangesRef.current.delete(fieldKey);
       } catch (error) {
-        setDelegados(previous);
         pendingGradeDeletesRef.current.delete(fieldKey);
         displayError(error);
       }
       return;
     }
-    const maxVal = criterios[key]?.max ?? 100;
+
     const parsed = Number(raw);
     if (!Number.isFinite(parsed)) return;
+
+    const maxVal = criterios[key]?.max ?? 100;
     if (hasTooManyDecimals(raw)) {
       displayError(new Error("Solo se permiten hasta dos decimales."));
-      const clamped = Math.max(0, Math.min(maxVal, parsed));
-      const rounded = Number(clamped.toFixed(2));
-      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: rounded } : d));
-      try {
-        await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: rounded }) });
-      } catch (error) {
-        setDelegados(previous);
-        displayError(error);
-      }
       return;
     }
     if (parsed > maxVal || parsed < 0) {
@@ -638,8 +629,8 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
       setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: rounded } : d));
       try {
         await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: rounded }) });
+        pendingGradeChangesRef.current.delete(fieldKey);
       } catch (error) {
-        setDelegados(previous);
         displayError(error);
       }
       return;
@@ -647,10 +638,10 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
 
     const cleanValue = Number(Math.max(0, parsed).toFixed(2));
     setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: cleanValue } : d));
+    pendingGradeChangesRef.current.delete(fieldKey);
     try {
       await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: cleanValue }) });
     } catch (error) {
-      setDelegados(previous);
       displayError(error);
     }
   }
