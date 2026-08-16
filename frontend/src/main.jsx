@@ -553,20 +553,36 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     const raw = String(value ?? "").trim();
     if (raw === "") {
       setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "" } : d));
+      pendingGradeDeletesRef.current.delete(`${id}:${key}`);
       persistEmptyCalificacion(id, key);
       return;
     }
     pendingGradeDeletesRef.current.delete(`${id}:${key}`);
     const parsed = Number(raw);
-    if (!Number.isFinite(parsed) || hasTooManyDecimals(raw)) return;
+    if (!Number.isFinite(parsed)) {
+      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "" } : d));
+      return;
+    }
+    if (hasTooManyDecimals(raw)) {
+      const maxVal = criterios[key]?.max ?? 100;
+      if (parsed > maxVal || parsed < 0) {
+        const clamped = Math.max(0, Math.min(maxVal, parsed));
+        const rounded = Number(clamped.toFixed(2));
+        setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: rounded } : d));
+      }
+      displayError(new Error(scoreErrorMessage(key)));
+      return;
+    }
     const maxVal = criterios[key]?.max ?? 100;
-    if (parsed > maxVal) {
-      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: raw } : d));
+    if (parsed > maxVal || parsed < 0) {
+      const clamped = Math.max(0, Math.min(maxVal, parsed));
+      const rounded = Number(clamped.toFixed(2));
+      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: rounded } : d));
       displayError(new Error(scoreErrorMessage(key)));
       return;
     }
 
-    setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: parsed < 0 ? 0 : raw } : d));
+    setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: parsed < 0 ? "0" : raw } : d));
   }
 
   async function persistEmptyCalificacion(id, key) {
@@ -605,10 +621,27 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     if (!Number.isFinite(parsed)) return;
     if (hasTooManyDecimals(raw)) {
       displayError(new Error("Solo se permiten hasta dos decimales."));
+      const clamped = Math.max(0, Math.min(maxVal, parsed));
+      const rounded = Number(clamped.toFixed(2));
+      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: rounded } : d));
+      try {
+        await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: rounded }) });
+      } catch (error) {
+        setDelegados(previous);
+        displayError(error);
+      }
       return;
     }
-    if (Number.isFinite(parsed) && parsed > maxVal) {
-      displayError(new Error(scoreErrorMessage(key)));
+    if (parsed > maxVal || parsed < 0) {
+      const clamped = Math.max(0, Math.min(maxVal, parsed));
+      const rounded = Number(clamped.toFixed(2));
+      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: rounded } : d));
+      try {
+        await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: rounded }) });
+      } catch (error) {
+        setDelegados(previous);
+        displayError(error);
+      }
       return;
     }
 
