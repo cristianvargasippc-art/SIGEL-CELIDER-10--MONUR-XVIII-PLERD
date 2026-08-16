@@ -47,8 +47,8 @@ async function saveCalificacion(req, res, delegadoId, payload) {
     const cleanId = permission.cleanId;
     const existing = await prisma.calificacion.findUnique({ where: { delegadoId: cleanId } });
 
-    const sanitizeScore = (val, max, fallback, label) => {
-      if (val === undefined) return fallback;
+    const sanitizeScore = (val, max, label) => {
+      if (val === undefined) return null;
       if (val === null || val === "") return null;
       const num = Number(val);
       if (!Number.isFinite(num) || num < 0) {
@@ -65,11 +65,11 @@ async function saveCalificacion(req, res, delegadoId, payload) {
 
     const data = {
       delegadoId: cleanId,
-      oratoria: sanitizeScore(payload.oratoria, 15, existing?.oratoria ?? null, "Oratoria"),
-      argumentacion: sanitizeScore(payload.argumentacion, 25, existing?.argumentacion ?? null, "Argumentacion"),
-      negociacion: sanitizeScore(payload.negociacion, 20, existing?.negociacion ?? null, "Negociacion"),
-      liderazgo: sanitizeScore(payload.liderazgo, 15, existing?.liderazgo ?? null, "Liderazgo"),
-      redaccion: sanitizeScore(payload.redaccion, 25, existing?.redaccion ?? null, "Redaccion"),
+      oratoria: payload.oratoria !== undefined ? sanitizeScore(payload.oratoria, 15, "Oratoria") : (existing?.oratoria ?? null),
+      argumentacion: payload.argumentacion !== undefined ? sanitizeScore(payload.argumentacion, 25, "Argumentacion") : (existing?.argumentacion ?? null),
+      negociacion: payload.negociacion !== undefined ? sanitizeScore(payload.negociacion, 20, "Negociacion") : (existing?.negociacion ?? null),
+      liderazgo: payload.liderazgo !== undefined ? sanitizeScore(payload.liderazgo, 15, "Liderazgo") : (existing?.liderazgo ?? null),
+      redaccion: payload.redaccion !== undefined ? sanitizeScore(payload.redaccion, 25, "Redaccion") : (existing?.redaccion ?? null),
       presenteEstado: payload.presente_estado ?? existing?.presenteEstado ?? null,
       pasaMinumeXvii: payload.pasa_minume_xvii ?? existing?.pasaMinumeXvii ?? false,
       mencion: payload.mencion !== undefined && payload.mencion !== null ? String(payload.mencion).trim() : (existing?.mencion ?? null),
