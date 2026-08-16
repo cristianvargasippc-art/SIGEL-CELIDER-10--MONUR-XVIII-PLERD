@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   BarChart3,
@@ -406,6 +406,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
   const [uploading, setUploading] = useState(false);
   const [view, setView] = useState(initialView);
   const [filtroCalificaciones, setFiltroCalificaciones] = useState("");
+  const pendingGradeDeletesRef = useRef(new Set());
   const canManageEvent = ["superadmin", "distrito"].includes(user?.role);
   const canTakeAttendance = canManageEvent;
 
@@ -491,7 +492,20 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
         apiRequest(`/api/eventos/${evento.id}/delegados`),
         apiRequest(`/api/eventos/${evento.id}/comisiones`)
       ]);
-      setDelegados(delData.map(mapDelegado));
+      setDelegados((current) => {
+        const currentById = new Map(current.map((delegado) => [delegado.id, delegado]));
+        return delData.map((row) => {
+          const mapped = mapDelegado(row);
+          const currentRow = currentById.get(mapped.id);
+          if (!currentRow) return mapped;
+          for (const key of Object.keys(criterios)) {
+            if (pendingGradeDeletesRef.current.has(`${mapped.id}:${key}`)) {
+              mapped[key] = "";
+            }
+          }
+          return mapped;
+        });
+      });
       setComisiones(comData);
     } catch (err) {
       displayError(err);
@@ -539,8 +553,10 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     const raw = String(value ?? "").trim();
     if (raw === "") {
       setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "" } : d));
+      persistEmptyCalificacion(id, key);
       return;
     }
+    pendingGradeDeletesRef.current.delete(`${id}:${key}`);
     const parsed = Number(raw);
     if (!Number.isFinite(parsed) || hasTooManyDecimals(raw)) return;
     const maxVal = criterios[key]?.max ?? 100;
@@ -553,15 +569,33 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: parsed < 0 ? 0 : raw } : d));
   }
 
+  async function persistEmptyCalificacion(id, key) {
+    const fieldKey = `${id}:${key}`;
+    if (pendingGradeDeletesRef.current.has(fieldKey)) return;
+    pendingGradeDeletesRef.current.add(fieldKey);
+    try {
+      await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: null }) });
+      pendingGradeDeletesRef.current.delete(fieldKey);
+    } catch (error) {
+      pendingGradeDeletesRef.current.delete(fieldKey);
+      displayError(error);
+      await load();
+    }
+  }
+
   async function handleGradeBlur(id, key, currentValue) {
     const raw = String(currentValue ?? "").trim();
     const previous = [...delegados];
     if (raw === "") {
       setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "" } : d));
+      const fieldKey = `${id}:${key}`;
+      if (pendingGradeDeletesRef.current.has(fieldKey)) return;
       try {
         await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: null }) });
+        pendingGradeDeletesRef.current.delete(fieldKey);
       } catch (error) {
         setDelegados(previous);
+        pendingGradeDeletesRef.current.delete(fieldKey);
         displayError(error);
       }
       return;

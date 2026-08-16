@@ -8,6 +8,16 @@ import { calificacionesLimiter } from "../middleware/rateLimit.js";
 
 export const calificacionesRouter = Router();
 
+const SCORE_FIELDS = ["oratoria", "argumentacion", "negociacion", "liderazgo", "redaccion"];
+
+function hasCalificacionContent(data) {
+  return SCORE_FIELDS.some((field) => data[field] !== null && data[field] !== undefined)
+    || Boolean(data.presenteEstado)
+    || data.pasaMinumeXvii === true
+    || Boolean(data.mencion)
+    || Boolean(data.feedback);
+}
+
 async function assertCanGrade(user, delegadoId) {
   const cleanId = Number(delegadoId);
   if (!cleanId || isNaN(cleanId) || cleanId <= 0) {
@@ -62,11 +72,15 @@ async function saveCalificacion(req, res, delegadoId, payload) {
       redaccion: sanitizeScore(payload.redaccion, 25, existing?.redaccion ?? null, "Redaccion"),
       presenteEstado: payload.presente_estado ?? existing?.presenteEstado ?? null,
       pasaMinumeXvii: payload.pasa_minume_xvii ?? existing?.pasaMinumeXvii ?? false,
-      mencion: payload.mencion ? String(payload.mencion).trim() : (existing?.mencion ?? null),
-      feedback: payload.feedback ? String(payload.feedback).trim() : (existing?.feedback ?? null)
+      mencion: payload.mencion !== undefined && payload.mencion !== null ? String(payload.mencion).trim() : (existing?.mencion ?? null),
+      feedback: payload.feedback !== undefined && payload.feedback !== null ? String(payload.feedback).trim() : (existing?.feedback ?? null)
     };
 
     data.ponderada = calcularPonderada(data);
+
+    if (!existing && !hasCalificacionContent(data)) {
+      return res.json(data);
+    }
 
     const saved = await prisma.calificacion.upsert({
       where: { delegadoId: cleanId },
@@ -124,6 +138,38 @@ calificacionesRouter.patch("/:delegadoId", verifyToken, authorize("admin", "supe
     return await saveCalificacion(req, res, result.data.delegado_id, result.data);
   } catch (err) {
     return res.status(400).json({ error: "Error procesando actualización de calificación.", detail: err.message });
+  }
+});
+
+calificacionesRouter.delete("/:delegadoId", verifyToken, authorize("admin", "superadmin"), async (req, res) => {
+  try {
+    const delegadoId = Number(req.params.delegadoId);
+    if (!delegadoId || isNaN(delegadoId)) {
+      return res.status(400).json({ error: "ID de delegado no valido." });
+    }
+    const permission = await assertCanGrade(req.user, delegadoId);
+    if (permission.error) return res.status(permission.error[0]).json({ error: permission.error[1] });
+
+    const existing = await prisma.calificacion.findUnique({ where: { delegadoId } });
+    if (!existing) return res.json({ success: true });
+
+    await prisma.calificacion.delete({ where: { delegadoId } });
+
+    try {
+      await prisma.audit.create({
+        data: {
+          userId: req.user.id,
+          action: "calificacion_eliminada",
+          entityType: "calificacion",
+          entityId: existing.id,
+          changes: { before: existing, after: null }
+        }
+      });
+    } catch (_auditErr) {}
+
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(400).json({ error: "No se pudo eliminar la calificacion.", detail: err.message });
   }
 });
 
