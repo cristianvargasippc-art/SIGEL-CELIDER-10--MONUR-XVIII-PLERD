@@ -570,10 +570,12 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
   useEffect(() => {
     load().catch(displayError);
     const timer = window.setInterval(() => {
+      const hasPendingChanges = pendingGradeChangesRef.current.size > 0;
+      const hasPendingDeletes = pendingGradeDeletesRef.current.size > 0;
       // No sobreescribimos el state local mientras el usuario tenga notas
-      // pendientes de persistir (evita que "se borren por si solas" al pasar
+      // pendientes de persistir o haya cambios no confirmados (evita que "se borren por si solas" al pasar
       // de cuadro). La recarga ocurre tras un blur o al pulsar Actualizar.
-      if (inputCacheRef.current.size === 0) load().catch(console.error);
+      if (inputCacheRef.current.size === 0 && !hasPendingChanges && !hasPendingDeletes) load().catch(console.error);
     }, 30000);
     return () => window.clearInterval(timer);
   }, [evento.id]);
@@ -655,12 +657,15 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     }
 
     // Normalizamos y persistimos el numero (ej. "12." -> 12, "12.5" -> 12.5).
-    setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: parsed } : d));
-    pendingGradeChangesRef.current.delete(cacheKey);
+    pendingGradeChangesRef.current.add(cacheKey);
     try {
       await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: parsed }) });
+      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: parsed } : d));
+      pendingGradeChangesRef.current.delete(cacheKey);
     } catch (error) {
       displayError(error);
+      // No eliminamos pendingGradeChangesRef para que el timer no recargue
+      // los datos del servidor y sobrescriba el valor no guardado.
     }
   }
 
