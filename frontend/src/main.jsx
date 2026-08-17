@@ -21,8 +21,6 @@ import {
   Bell,
   Settings,
   Command,
-  ChevronLeft,
-  ChevronRight,
   X,
   SlidersHorizontal
 } from "lucide-react";
@@ -1366,7 +1364,6 @@ function Dashboard({ user, onLogout }) {
   const [audits, setAudits] = useState([]);
   const [eventoActivo, setEventoActivo] = useState(null);
   const [showSurveyModal, setShowSurveyModal] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => { document.documentElement.dataset.theme = "light"; localStorage.removeItem("sigel-theme"); }, []);
@@ -1457,13 +1454,13 @@ function Dashboard({ user, onLogout }) {
   };
 
   return (
-    <div className={`app-shell admin-layout ${sidebarCollapsed ? "sidebar-is-collapsed" : ""}`}>
+    <div className="app-shell admin-layout">
       {mobileNavOpen && <div className="sidebar-backdrop" onClick={() => setMobileNavOpen(false)} />}
       
-      <aside className={`app-sidebar ${sidebarCollapsed ? "collapsed" : ""} ${mobileNavOpen ? "mobile-open" : ""}`}>
+      <aside className={`app-sidebar ${mobileNavOpen ? "mobile-open" : ""}`}>
         <div className="brand sidebar-brand">
           <LogoMark />
-          {(!sidebarCollapsed || mobileNavOpen) && <div><strong>SIGEL CELIDER 10</strong><span>Regional 10</span></div>}
+          <div><strong>SIGEL CELIDER 10</strong><span>Regional 10</span></div>
           {mobileNavOpen && (
             <button className="toast-close mobile-close-btn" onClick={() => setMobileNavOpen(false)}>
               <X size={20} color="#ffffff" />
@@ -1471,45 +1468,42 @@ function Dashboard({ user, onLogout }) {
           )}
         </div>
         <nav className="side-nav" aria-label="Panel de navegación">
-          {(!sidebarCollapsed || mobileNavOpen) && <div className="sidebar-section-title">INICIO</div>}
+          <div className="sidebar-section-title">INICIO</div>
           <button className={active === "inicio" ? "active" : ""} onClick={() => handleNavClick("inicio")}>
-            <BarChart3 size={17} /> {(!sidebarCollapsed || mobileNavOpen) && "Inicio"}
+            <BarChart3 size={17} /> Inicio
           </button>
 
-          {(!sidebarCollapsed || mobileNavOpen) && <div className="sidebar-section-title">GESTIÓN</div>}
+          <div className="sidebar-section-title">GESTIÓN</div>
           {navItems.filter((i) => i.id !== "inicio").map(({ id, label, icon: Icon }) => (
             <button key={id} className={active === id ? "active" : ""} onClick={() => handleNavClick(id)}>
-              <Icon size={17} /> {(!sidebarCollapsed || mobileNavOpen) && label}
+              <Icon size={17} /> {label}
             </button>
           ))}
 
           {user.role === "superadmin" && (
             <>
-              {(!sidebarCollapsed || mobileNavOpen) && <div className="sidebar-section-title">SUPERVISIÓN</div>}
+              <div className="sidebar-section-title">SUPERVISIÓN</div>
               <button className={active === "encuestas" ? "active" : ""} onClick={() => handleNavClick("encuestas")}>
-                <Star size={17} /> {(!sidebarCollapsed || mobileNavOpen) && "Encuestas Satisfacción"}
+                <Star size={17} /> Encuestas Satisfacción
               </button>
               <button className={active === "seguridad" ? "active" : ""} onClick={() => handleNavClick("seguridad")}>
-                <ShieldCheck size={17} /> {(!sidebarCollapsed || mobileNavOpen) && "Seguridad"}
+                <ShieldCheck size={17} /> Seguridad
               </button>
             </>
           )}
         </nav>
         <div className="sidebar-account">
           <span className="role-pill">{user.role}</span>
-          {(!sidebarCollapsed || mobileNavOpen) && <strong>{user.email}</strong>}
-          <button className="btn secondary full" onClick={onLogout} type="button"><LogOut size={16} /> {(!sidebarCollapsed || mobileNavOpen) && "Cerrar sesión"}</button>
+          <strong>{user.email}</strong>
+          <button className="btn secondary full" onClick={onLogout} type="button"><LogOut size={16} /> Cerrar sesión</button>
         </div>
       </aside>
 
       <div className="main-content-wrap">
         <header className="top-header-bar">
           <div className="top-header-left">
-            <button className="sidebar-toggle-btn desktop-toggle" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title="Alternar menú">
-              {sidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-            </button>
             <button className="sidebar-toggle-btn mobile-toggle" onClick={() => setMobileNavOpen(!mobileNavOpen)} title="Abrir menú">
-              <ChevronRight size={18} />
+              <Command size={18} />
             </button>
           </div>
 
