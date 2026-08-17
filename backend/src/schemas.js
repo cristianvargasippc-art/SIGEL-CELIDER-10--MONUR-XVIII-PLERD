@@ -20,6 +20,10 @@ export const calificacionSchema = z.object({
   feedback: z.string().max(500).optional()
 });
 
+export const calificacionesBulkSchema = z.object({
+  calificaciones: z.array(calificacionSchema).min(1).max(500)
+});
+
 export const feedbackSchema = z.object({
   feedback: z.string().max(500)
 });

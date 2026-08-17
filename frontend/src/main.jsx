@@ -460,6 +460,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
   const pendingGradeDeletesRef = useRef(new Set());
   const pendingGradeChangesRef = useRef(new Set());
   const inputCacheRef = useRef(new Map());
+  const skipGradeBlurSaveRef = useRef(false);
   const canManageEvent = ["superadmin", "distrito"].includes(user?.role);
   const canTakeAttendance = canManageEvent;
 
@@ -627,6 +628,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
   }
 
   async function handleGradeBlur(id, key) {
+    if (skipGradeBlurSaveRef.current) return;
     const cacheKey = `${id}:${key}`;
     const cachedRaw = inputCacheRef.current.get(cacheKey);
     inputCacheRef.current.delete(cacheKey);
@@ -699,16 +701,22 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
   }
 
   async function saveVisibleCalificaciones() {
-    const rows = presentesFiltrados.length > 0 ? presentesFiltrados : presentes;
-    await flushPendingGrades();
-
-    for (const delegado of rows) {
+    const calificaciones = presentes.map((delegado) => {
       const body = { delegado_id: Number(delegado.id) };
       for (const [key, criterio] of Object.entries(criterios)) {
-        body[key] = normalizeScoreForSave(delegado[key], criterio.max, criterio.label);
+        const cacheKey = `${delegado.id}:${key}`;
+        const value = inputCacheRef.current.has(cacheKey) ? inputCacheRef.current.get(cacheKey) : delegado[key];
+        body[key] = normalizeScoreForSave(value, criterio.max, criterio.label);
       }
-      await apiRequest(`/api/calificaciones/${delegado.id}`, { method: "PATCH", body: JSON.stringify(body) });
-    }
+      return body;
+    });
+
+    if (calificaciones.length === 0) return;
+
+    await apiRequest("/api/calificaciones/bulk", {
+      method: "POST",
+      body: JSON.stringify({ calificaciones })
+    });
 
     pendingGradeChangesRef.current.clear();
     pendingGradeDeletesRef.current.clear();
@@ -1065,13 +1073,21 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
               <button
                 type="button"
                 className="btn primary"
+                onMouseDown={() => {
+                  skipGradeBlurSaveRef.current = true;
+                }}
+                onTouchStart={() => {
+                  skipGradeBlurSaveRef.current = true;
+                }}
                 onClick={async () => {
                   try {
                     await saveVisibleCalificaciones();
+                    triggerAlert("Calificaciones guardadas correctamente.", "success");
                     await load();
-                    triggerAlert("Calificaciones guardadas y refrescadas correctamente.", "success");
                   } catch (error) {
                     displayError(error);
+                  } finally {
+                    skipGradeBlurSaveRef.current = false;
                   }
                 }}
                 style={{ height: "40px", display: "flex", alignItems: "center", gap: "8px" }}
