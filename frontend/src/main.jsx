@@ -569,7 +569,12 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
 
   useEffect(() => {
     load().catch(displayError);
-    const timer = window.setInterval(() => load().catch(console.error), 30000);
+    const timer = window.setInterval(() => {
+      // No sobreescribimos el state local mientras el usuario tenga notas
+      // pendientes de persistir (evita que "se borren por si solas" al pasar
+      // de cuadro). La recarga ocurre tras un blur o al pulsar Actualizar.
+      if (inputCacheRef.current.size === 0) load().catch(console.error);
+    }, 30000);
     return () => window.clearInterval(timer);
   }, [evento.id]);
 
@@ -609,41 +614,25 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     const cacheKey = `${id}:${key}`;
     inputCacheRef.current.set(cacheKey, raw);
 
-    if (raw === "") {
-      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "" } : d));
-      pendingGradeDeletesRef.current.delete(cacheKey);
-      pendingGradeChangesRef.current.delete(cacheKey);
-      persistEmptyCalificacion(id, key);
-      return;
-    }
-    pendingGradeDeletesRef.current.delete(cacheKey);
-    const parsed = Number(raw);
-    if (!Number.isFinite(parsed)) return;
-
+    // Sincronizamos SIEMPRE el estado con lo escrito, incluyendo valores parciales
+    // (ej. "12." o "1."), para mantener el input controlado coherente con el state.
+    // La validacion y la persistencia numerica al backend ocurren al blur (handleGradeBlur),
+    // lo que evita que el input se "revise" al valor anterior al re-render y que el
+    // primer digito se quede pegado al borrar.
     setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: raw } : d));
-    pendingGradeChangesRef.current.set(cacheKey, Number(raw));
-  }
-
-  async function persistEmptyCalificacion(id, key) {
-    const fieldKey = `${id}:${key}`;
-    if (pendingGradeDeletesRef.current.has(fieldKey)) return;
-    pendingGradeDeletesRef.current.add(fieldKey);
-    try {
-      await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: null }) });
-      pendingGradeDeletesRef.current.delete(fieldKey);
-    } catch (error) {
-      pendingGradeDeletesRef.current.delete(fieldKey);
-      displayError(error);
-    }
+    pendingGradeDeletesRef.current.delete(cacheKey);
+    pendingGradeChangesRef.current.delete(cacheKey);
   }
 
   async function handleGradeBlur(id, key) {
     const cacheKey = `${id}:${key}`;
-    const cachedRaw = inputCacheRef.current.get(cacheKey) ?? "";
+    const cachedRaw = inputCacheRef.current.get(cacheKey);
     inputCacheRef.current.delete(cacheKey);
+    if (cachedRaw === undefined) return; // nada que persistir
     const raw = cachedRaw.trim();
 
     if (raw === "") {
+      // Borrado explicito: persistimos null al backend.
       setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "" } : d));
       if (pendingGradeDeletesRef.current.has(cacheKey)) return;
       pendingGradeDeletesRef.current.add(cacheKey);
@@ -659,15 +648,32 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     }
 
     const parsed = Number(raw);
-    if (!Number.isFinite(parsed)) return;
+    if (!Number.isFinite(parsed)) {
+      // Valor no numerico: no persistimos, dejamos lo escrito en pantalla.
+      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: raw } : d));
+      return;
+    }
 
-    const cleanValue = parsed;
-    setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: cleanValue } : d));
+    // Normalizamos y persistimos el numero (ej. "12." -> 12, "12.5" -> 12.5).
+    setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: parsed } : d));
     pendingGradeChangesRef.current.delete(cacheKey);
     try {
-      await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: cleanValue }) });
+      await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: parsed }) });
     } catch (error) {
       displayError(error);
+    }
+  }
+
+  async function flushPendingGrades() {
+    if (inputCacheRef.current.size === 0) return;
+    const keys = Array.from(inputCacheRef.current.keys());
+    for (const cacheKey of keys) {
+      const [id, key] = cacheKey.split(":");
+      try {
+        await handleGradeBlur(id, key);
+      } catch (err) {
+        displayError(err);
+      }
     }
   }
 
@@ -1018,6 +1024,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
                 type="button"
                 className="btn secondary"
                 onClick={async () => {
+                  await flushPendingGrades();
                   await load();
                 }}
                 style={{ height: "40px", display: "flex", alignItems: "center", gap: "8px" }}
