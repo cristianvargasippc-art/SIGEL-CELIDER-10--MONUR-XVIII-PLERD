@@ -211,6 +211,10 @@ function readStoredArray(key) {
   }
 }
 
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
 function displayError(error) {
   if (!error) return;
   const msg = error.message || String(error);
@@ -1095,6 +1099,9 @@ function UsuariosPanel({ user, distritos, comisiones, admins, setAdmins, onReloa
   const [role, setRole] = useState(user.role === "distrito" ? "admin" : "distrito");
   const [distritoId, setDistritoId] = useState("");
   const [comisionId, setComisionId] = useState("");
+  const distritosSafe = asArray(distritos);
+  const comisionesSafe = asArray(comisiones);
+  const adminsSafe = asArray(admins);
 
   async function submit(event) {
     event.preventDefault();
@@ -1103,9 +1110,9 @@ function UsuariosPanel({ user, distritos, comisiones, admins, setAdmins, onReloa
     const tempPassword = password;
     const tempRole = role;
     const resolvedDistritoId = user.role === "distrito" ? user.distrito_id : (distritoId ? Number(distritoId) : null);
-    const targetDistrito = distritos.find((d) => d.id === resolvedDistritoId) || (user.distrito ? { id: resolvedDistritoId, codigo: user.distrito } : null);
+    const targetDistrito = distritosSafe.find((d) => d.id === resolvedDistritoId) || (user.distrito ? { id: resolvedDistritoId, codigo: user.distrito } : null);
     const tempComisionId = comisionId;
-    const targetComision = comisiones.find((c) => c.id === Number(tempComisionId)) || null;
+    const targetComision = comisionesSafe.find((c) => c.id === Number(tempComisionId)) || null;
 
     setEmail("");
     setPassword("");
@@ -1157,13 +1164,13 @@ function UsuariosPanel({ user, distritos, comisiones, admins, setAdmins, onReloa
       <form className="users-form" onSubmit={submit}>
         <label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
         <label>Rol<select value={role} onChange={(e) => setRole(e.target.value)}><option value="admin">Mesa directiva</option>{user.role === "superadmin" && <option value="regional">Regional</option>}{user.role === "superadmin" && <option value="distrito">Distrito</option>}</select></label>
-        <label>Distrito<select value={user.role === "distrito" ? user.distrito_id || "" : distritoId} onChange={(e) => setDistritoId(e.target.value)} disabled={user.role === "distrito"}><option value="">No aplica</option>{distritos.map((d) => <option value={d.id} key={d.id}>{d.codigo}</option>)}</select></label>
-        <label>Comisión<select value={comisionId} onChange={(e) => setComisionId(e.target.value)} required={role === "admin"}><option value="">No aplica</option>{comisiones.map((c) => <option value={c.id} key={c.id}>{c.nombre}{c.evento ? ` | ${c.evento.nombre}` : ""}</option>)}</select></label>
+        <label>Distrito<select value={user.role === "distrito" ? user.distrito_id || "" : distritoId} onChange={(e) => setDistritoId(e.target.value)} disabled={user.role === "distrito"}><option value="">No aplica</option>{distritosSafe.map((d) => <option value={d.id} key={d.id}>{d.codigo}</option>)}</select></label>
+        <label>Comisión<select value={comisionId} onChange={(e) => setComisionId(e.target.value)} required={role === "admin"}><option value="">No aplica</option>{comisionesSafe.map((c) => <option value={c.id} key={c.id}>{c.nombre}{c.evento ? ` | ${c.evento.nombre}` : ""}</option>)}</select></label>
         <label>Contraseña<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} /></label>
         <button className="btn primary"><UserPlus size={15} /> Crear</button>
       </form>
       <div className="admin-list">
-        {admins.map((a) => {
+        {adminsSafe.map((a) => {
           const isTemp = String(a.id).startsWith("temp-");
           return (
             <div key={a.id} className="row-actions" style={isTemp ? { opacity: 0.6, pointerEvents: "none" } : undefined}>
@@ -1183,7 +1190,7 @@ function UsuariosPanel({ user, distritos, comisiones, admins, setAdmins, onReloa
 }
 
 function RegionalReport({ eventos }) {
-  const rows = eventos.map((e) => ({
+  const rows = asArray(eventos).map((e) => ({
     Distrito: e.distrito?.codigo,
     Evento: e.nombre,
     Fecha: e.fecha ? new Date(e.fecha).toLocaleDateString("es-DO") : "",
@@ -1336,6 +1343,17 @@ function EncuestaSatisfaccionModal({ isOpen, onClose }) {
   );
 }
 
+function Metric({ icon: Icon, label, value, note }) {
+  return (
+    <div className="metric-card">
+      {Icon ? <Icon size={22} /> : null}
+      <span>{label}</span>
+      <strong>{value}</strong>
+      {note ? <small>{note}</small> : null}
+    </div>
+  );
+}
+
 function EncuestasAdminPanel() {
   const [data, setData] = useState({ encuestas: [], stats: { total: 0, promedio: 0, desglose: {} } });
   const [loading, setLoading] = useState(true);
@@ -1418,7 +1436,10 @@ function EncuestasAdminPanel() {
 
 
 function Dashboard({ user, onLogout }) {
-  const [active, setActive] = useState(user.role === "admin" ? "calificaciones" : "inicio");
+  const currentUser = user || {};
+  const role = currentUser.role || "admin";
+  const email = currentUser.email || "";
+  const [active, setActive] = useState(role === "admin" ? "calificaciones" : "inicio");
   const [eventos, setEventos] = useState([]);
   const [distritos, setDistritos] = useState([]);
   const [admins, setAdmins] = useState([]);
@@ -1441,13 +1462,13 @@ function Dashboard({ user, onLogout }) {
 
   async function load() {
     try {
-      if (user.role === "superadmin" || user.role === "distrito") {
+      if (role === "superadmin" || role === "distrito") {
         const results = await Promise.allSettled([
           apiRequest("/api/eventos"),
           apiRequest("/api/eventos/distritos"),
           apiRequest("/api/admins"),
           apiRequest("/api/admins/comisiones"),
-          user.role === "superadmin" ? apiRequest("/api/audit").catch(() => []) : Promise.resolve([])
+          role === "superadmin" ? apiRequest("/api/audit").catch(() => []) : Promise.resolve([])
         ]);
         setEventos(results[0].status === "fulfilled" ? results[0].value : []);
         setDistritos(results[1].status === "fulfilled" ? results[1].value : []);
@@ -1490,24 +1511,24 @@ function Dashboard({ user, onLogout }) {
   }, [eventoActivo, active]);
 
   useEffect(() => {
-    if (active === "seguridad" && user.role === "superadmin") {
+    if (active === "seguridad" && role === "superadmin") {
       loadAudits().catch(console.error);
     }
-  }, [active, user.role]);
+  }, [active, role]);
 
-  const eventosSafe = Array.isArray(eventos) ? eventos : [];
+  const eventosSafe = asArray(eventos);
   const totalDelegados = eventosSafe.reduce((sum, e) => sum + (e._count?.delegados || 0), 0);
   const totalComisiones = eventosSafe.reduce((sum, e) => sum + (e._count?.comisiones || 0), 0);
-  const isRegional = ["superadmin", "regional"].includes(user.role);
-  const userName = user.email ? String(user.email).split("@")[0].toUpperCase() : "USUARIO";
+  const isRegional = ["superadmin", "regional"].includes(role);
+  const userName = email ? String(email).split("@")[0].toUpperCase() : "USUARIO";
 
   const navItems = [
-    { id: "inicio", label: "Inicio", icon: BarChart3, show: user.role !== "admin" },
-    { id: "eventos", label: "Eventos", icon: FileSpreadsheet, show: user.role !== "admin" },
+    { id: "inicio", label: "Inicio", icon: BarChart3, show: role !== "admin" },
+    { id: "eventos", label: "Eventos", icon: FileSpreadsheet, show: role !== "admin" },
     { id: "calificaciones", label: "Calificaciones", icon: ClipboardCheck, show: true },
-    { id: "agenda", label: "Agenda", icon: CalendarDays, show: user.role === "superadmin" || user.role === "distrito" },
+    { id: "agenda", label: "Agenda", icon: CalendarDays, show: role === "superadmin" || role === "distrito" },
     { id: "regional", label: "Regional", icon: Users, show: isRegional },
-    { id: "usuarios", label: "Usuarios", icon: UserPlus, show: user.role === "superadmin" || user.role === "distrito" }
+    { id: "usuarios", label: "Usuarios", icon: UserPlus, show: role === "superadmin" || role === "distrito" }
   ].filter((item) => item.show);
 
   const handleNavClick = (id) => {
@@ -1547,7 +1568,7 @@ function Dashboard({ user, onLogout }) {
             </button>
           ))}
 
-          {user.role === "superadmin" && (
+          {role === "superadmin" && (
             <>
               <div className="sidebar-section-title">SUPERVISIÓN</div>
               <button className={active === "encuestas" ? "active" : ""} onClick={() => handleNavClick("encuestas")}>
@@ -1560,8 +1581,8 @@ function Dashboard({ user, onLogout }) {
           )}
         </nav>
         <div className="sidebar-account">
-          <span className="role-pill">{user.role}</span>
-          <strong>{user.email}</strong>
+          <span className="role-pill">{role}</span>
+          <strong>{email || "Usuario"}</strong>
           <button className="btn secondary full" onClick={onLogout} type="button"><LogOut size={16} /> Cerrar sesión</button>
         </div>
       </aside>
@@ -1584,8 +1605,8 @@ function Dashboard({ user, onLogout }) {
             <button className="icon-btn" title="Alertas de plataforma" onClick={() => triggerAlert("Sin alertas críticas en la plataforma", "success", "🔔 Estado de Alerta")}>
               <Bell size={18} />
             </button>
-            <div className="user-avatar-badge" title={user.email}>
-              {user.email ? user.email[0].toUpperCase() : "U"}
+            <div className="user-avatar-badge" title={email}>
+              {email ? email[0].toUpperCase() : "U"}
             </div>
           </div>
         </header>
@@ -1614,20 +1635,20 @@ function Dashboard({ user, onLogout }) {
                 </div>
               </section>
               <section className="metrics-grid">
-                <Metric icon={BarChart3} label="Eventos" value={eventos.length} note="Registrados" />
+                <Metric icon={BarChart3} label="Eventos" value={eventosSafe.length} note="Registrados" />
                 <Metric icon={Users} label="Delegados" value={totalDelegados} note="Cargados" />
                 <Metric icon={FileSpreadsheet} label="Comisiones" value={totalComisiones} note="Configuradas" />
                 <Metric icon={ShieldCheck} label="Seguridad" value="Activa" note="Acceso por roles" />
               </section>
             </>
           )}
-          {active === "eventos" && (eventoActivo ? <EventoDetalle user={user} evento={eventoActivo} onBack={() => { setEventoActivo(null); load(); }} /> : <EventosPanel user={user} eventos={eventos} setEventos={setEventos} distritos={distritos} onReload={load} setEventoActivo={setEventoActivo} />)}
-          {active === "calificaciones" && (eventoActivo ? <EventoDetalle user={user} evento={eventoActivo} initialView="calificaciones" onBack={() => { setEventoActivo(null); load(); }} /> : <EventosPanel user={user} eventos={eventos} setEventos={setEventos} distritos={distritos} onReload={load} setEventoActivo={setEventoActivo} />)}
+          {active === "eventos" && (eventoActivo ? <EventoDetalle user={currentUser} evento={eventoActivo} onBack={() => { setEventoActivo(null); load(); }} /> : <EventosPanel user={currentUser} eventos={eventosSafe} setEventos={setEventos} distritos={distritos} onReload={load} setEventoActivo={setEventoActivo} />)}
+          {active === "calificaciones" && (eventoActivo ? <EventoDetalle user={currentUser} evento={eventoActivo} initialView="calificaciones" onBack={() => { setEventoActivo(null); load(); }} /> : <EventosPanel user={currentUser} eventos={eventosSafe} setEventos={setEventos} distritos={distritos} onReload={load} setEventoActivo={setEventoActivo} />)}
           {active === "agenda" && <AgendaPanel eventos={eventos} />}
           {active === "regional" && <RegionalReport eventos={eventos} />}
-          {active === "usuarios" && <UsuariosPanel user={user} distritos={distritos} comisiones={comisiones} admins={admins} setAdmins={setAdmins} onReload={load} onDeactivate={deactivateAdmin} />}
-          {active === "encuestas" && user.role === "superadmin" && <EncuestasAdminPanel />}
-          {active === "seguridad" && user.role === "superadmin" && <SeguridadPanel audits={audits} onRefresh={loadAudits} />}
+          {active === "usuarios" && <UsuariosPanel user={currentUser} distritos={distritos} comisiones={comisiones} admins={admins} setAdmins={setAdmins} onReload={load} onDeactivate={deactivateAdmin} />}
+          {active === "encuestas" && role === "superadmin" && <EncuestasAdminPanel />}
+          {active === "seguridad" && role === "superadmin" && <SeguridadPanel audits={audits} onRefresh={loadAudits} />}
         </ErrorBoundary>
       </main>
 
@@ -1638,7 +1659,7 @@ function Dashboard({ user, onLogout }) {
 }
 
 function AgendaPanel({ eventos }) {
-  const rows = [...eventos].sort((a, b) => new Date(a.fecha || 0) - new Date(b.fecha || 0));
+  const rows = [...asArray(eventos)].sort((a, b) => new Date(a.fecha || 0) - new Date(b.fecha || 0));
   return (
     <article className="activity-card">
       <div className="table-title">
@@ -1659,7 +1680,7 @@ function AgendaPanel({ eventos }) {
 function SeguridadPanel({ audits, onRefresh }) {
   const [searchTerm, setSearchTerm] = useState("");
 
-  const filteredAudits = audits.filter((a) => {
+  const filteredAudits = asArray(audits).filter((a) => {
     const email = a.user?.email || "sistema";
     const text = `${a.action} ${email} ${a.entityType}`.toLowerCase();
     return text.includes(searchTerm.toLowerCase());
