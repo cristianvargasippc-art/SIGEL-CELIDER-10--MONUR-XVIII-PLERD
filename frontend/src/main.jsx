@@ -458,7 +458,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
   const [view, setView] = useState(initialView);
   const [filtroCalificaciones, setFiltroCalificaciones] = useState("");
   const pendingGradeDeletesRef = useRef(new Set());
-  const pendingGradeChangesRef = useRef(new Map());
+  const pendingGradeChangesRef = useRef(new Set());
   const inputCacheRef = useRef(new Map());
   const canManageEvent = ["superadmin", "distrito"].includes(user?.role);
   const canTakeAttendance = canManageEvent;
@@ -680,6 +680,39 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
         displayError(err);
       }
     }
+  }
+
+  function normalizeScoreForSave(value, max, label) {
+    const raw = String(value ?? "").trim();
+    if (raw === "") return null;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) {
+      throw new Error(`${label} debe ser un numero valido.`);
+    }
+    if (parsed < 0 || parsed > max) {
+      throw new Error(`${label} debe estar entre 0 y ${max}.`);
+    }
+    if (Math.abs(parsed * 100 - Math.round(parsed * 100)) >= 1e-9) {
+      throw new Error(`${label} puede tener hasta dos decimales.`);
+    }
+    return Number(parsed.toFixed(2));
+  }
+
+  async function saveVisibleCalificaciones() {
+    const rows = presentesFiltrados.length > 0 ? presentesFiltrados : presentes;
+    await flushPendingGrades();
+
+    for (const delegado of rows) {
+      const body = { delegado_id: Number(delegado.id) };
+      for (const [key, criterio] of Object.entries(criterios)) {
+        body[key] = normalizeScoreForSave(delegado[key], criterio.max, criterio.label);
+      }
+      await apiRequest(`/api/calificaciones/${delegado.id}`, { method: "PATCH", body: JSON.stringify(body) });
+    }
+
+    pendingGradeChangesRef.current.clear();
+    pendingGradeDeletesRef.current.clear();
+    inputCacheRef.current.clear();
   }
 
   async function updateAvanza(id, etapa) {
@@ -1034,7 +1067,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
                 className="btn primary"
                 onClick={async () => {
                   try {
-                    await flushPendingGrades();
+                    await saveVisibleCalificaciones();
                     await load();
                     triggerAlert("Calificaciones guardadas y refrescadas correctamente.", "success");
                   } catch (error) {
