@@ -1474,10 +1474,11 @@ function Dashboard({ user, onLogout }) {
     }
   }, [active, user.role]);
 
-  const totalDelegados = eventos.reduce((sum, e) => sum + (e._count?.delegados || 0), 0);
-  const totalComisiones = eventos.reduce((sum, e) => sum + (e._count?.comisiones || 0), 0);
+  const eventosSafe = Array.isArray(eventos) ? eventos : [];
+  const totalDelegados = eventosSafe.reduce((sum, e) => sum + (e._count?.delegados || 0), 0);
+  const totalComisiones = eventosSafe.reduce((sum, e) => sum + (e._count?.comisiones || 0), 0);
   const isRegional = ["superadmin", "regional"].includes(user.role);
-  const userName = user.email ? user.email.split("@")[0].toUpperCase() : "USUARIO";
+  const userName = user.email ? String(user.email).split("@")[0].toUpperCase() : "USUARIO";
 
   const navItems = [
     { id: "inicio", label: "Inicio", icon: BarChart3, show: user.role !== "admin" },
@@ -1748,7 +1749,17 @@ function App() {
     <>
       <ToastContainer />
       {user ? (
-        <Dashboard user={user} onLogout={logout} />
+        <ErrorBoundary fallback={
+          <div className="app-shell" style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: "24px" }}>
+            <div className="activity-card" style={{ maxWidth: "520px", width: "100%", textAlign: "center" }}>
+              <h2 style={{ color: "#a63a32" }}>⚠️ No se pudo cargar el panel</h2>
+              <p style={{ margin: "12px 0 18px" }}>Ocurrió un error inesperado al abrir la sesión. Pulsa el botón para intentarlo de nuevo.</p>
+              <button className="btn primary" onClick={() => window.location.reload()}>Reintentar / Recargar</button>
+            </div>
+          </div>
+        }>
+          <Dashboard user={user} onLogout={logout} />
+        </ErrorBoundary>
       ) : page === "login" ? (
         <LoginPage onLogin={setUser} onBackToHome={() => setPage("home")} />
       ) : (
