@@ -15,7 +15,6 @@ import {
   UserPlus,
   Users,
   ClipboardCheck,
-  Search,
   RefreshCw,
   Star,
   MessageSquare,
@@ -157,19 +156,9 @@ function ponderada(row) {
   return Object.entries(criterios).reduce((sum, [key, item]) => {
     if (row[key] === "" || row[key] === null || row[key] === undefined) return sum;
     const value = Number(row[key]);
-    if (!Number.isFinite(value) || value < 0) return sum;
-    return sum + Math.min(value, item.max);
+    if (!Number.isFinite(value)) return sum;
+    return sum + value;
   }, 0);
-}
-
-function scoreErrorMessage(key) {
-  const criterio = criterios[key];
-  if (!criterio) return "La calificacion enviada no es valida.";
-  return `${criterio.label} no puede pasar de ${criterio.max} puntos. Corrige el valor para guardar.`;
-}
-
-function hasTooManyDecimals(value) {
-  return !/^\d+(\.\d{0,2})?$/.test(String(value));
 }
 
 function mapDelegado(row) {
@@ -567,26 +556,6 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     const parsed = Number(raw);
     if (!Number.isFinite(parsed)) return;
 
-    const maxVal = criterios[key]?.max ?? 100;
-    if (parsed > maxVal) {
-      const clamped = Math.min(parsed, maxVal);
-      const rounded = Number(clamped.toFixed(2));
-      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: rounded } : d));
-      pendingGradeChangesRef.current.set(cacheKey, rounded);
-      displayError(new Error(scoreErrorMessage(key)));
-      return;
-    }
-    if (parsed < 0) {
-      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "0" } : d));
-      pendingGradeChangesRef.current.set(cacheKey, 0);
-      displayError(new Error(scoreErrorMessage(key)));
-      return;
-    }
-    if (hasTooManyDecimals(raw)) {
-      displayError(new Error(scoreErrorMessage(key)));
-      return;
-    }
-
     setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: raw } : d));
     pendingGradeChangesRef.current.set(cacheKey, Number(raw));
   }
@@ -628,35 +597,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     const parsed = Number(raw);
     if (!Number.isFinite(parsed)) return;
 
-    const maxVal = criterios[key]?.max ?? 100;
-    if (parsed > maxVal) {
-      const clamped = Math.min(parsed, maxVal);
-      const rounded = Number(clamped.toFixed(2));
-      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: rounded } : d));
-      try {
-        await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: rounded }) });
-        pendingGradeChangesRef.current.delete(cacheKey);
-      } catch (error) {
-        displayError(error);
-      }
-      return;
-    }
-    if (parsed < 0) {
-      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "0" } : d));
-      try {
-        await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: "0" }) });
-        pendingGradeChangesRef.current.delete(cacheKey);
-      } catch (error) {
-        displayError(error);
-      }
-      return;
-    }
-    if (hasTooManyDecimals(raw)) {
-      displayError(new Error("Solo se permiten hasta dos decimales."));
-      return;
-    }
-
-    const cleanValue = Number(parsed.toFixed(2));
+    const cleanValue = parsed;
     setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: cleanValue } : d));
     pendingGradeChangesRef.current.delete(cacheKey);
     try {
@@ -980,7 +921,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
 
       {view === "calificaciones" && (
         <>
-          <div className="section-heading compact" style={{ marginTop: "28px" }}>
+<div className="section-heading compact" style={{ marginTop: "28px" }}>
             <span>Paso 4</span>
             <h2>Calificaciones</h2>
             <p>Evaluación de delegados presentes. Los ausentes no aparecen aquí. Puedes usar hasta dos decimales; se recomienda usar un decimal cuando sea suficiente, por ejemplo 12.5.</p>
@@ -1050,14 +991,11 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
                         <span>{d.designacion || "-"}</span>
                       </div>
                     </td>
-                    {Object.keys(criterios).map((key) => (
+{Object.keys(criterios).map((key) => (
                       <td key={key}>
                         <input
                           className="score-input"
-                          type="number"
-                          min="0"
-                          max={criterios[key].max}
-                          step="0.01"
+                          type="text"
                           inputMode="decimal"
                           placeholder="-"
                           value={d[key]}
@@ -1430,7 +1368,6 @@ function Dashboard({ user, onLogout }) {
   const [showSurveyModal, setShowSurveyModal] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [globalSearch, setGlobalSearch] = useState("");
 
   useEffect(() => { document.documentElement.dataset.theme = "light"; localStorage.removeItem("sigel-theme"); }, []);
 
@@ -1574,11 +1511,6 @@ function Dashboard({ user, onLogout }) {
             <button className="sidebar-toggle-btn mobile-toggle" onClick={() => setMobileNavOpen(!mobileNavOpen)} title="Abrir menú">
               <ChevronRight size={18} />
             </button>
-            <div className="top-search-bar">
-              <Search size={16} color="#64748b" />
-              <input type="text" placeholder="Buscar..." value={globalSearch} onChange={(e) => setGlobalSearch(e.target.value)} />
-              <span className="search-shortcut-badge">⌘K</span>
-            </div>
           </div>
 
           <div className="top-header-right">
