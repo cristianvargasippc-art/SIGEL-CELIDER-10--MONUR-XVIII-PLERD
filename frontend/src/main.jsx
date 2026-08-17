@@ -1024,17 +1024,9 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
                   }}
                 />
               </div>
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={async () => {
-                  await flushPendingGrades();
-                  await load();
-                }}
-                style={{ height: "40px", display: "flex", alignItems: "center", gap: "8px" }}
-              >
-                {/* Botón removido para evitar pérdida de calificaciones causada por flushPendingGrades */}
-
+            </div>
+          )}
+          {/* Botón "Actualizar Calificaciones" removido para evitar pérdida de calificaciones causada por flushPendingGrades */}
           {presentes.length === 0 && <div className="empty-state"><ClipboardCheck size={24} /><h3>Sin delegados presentes</h3><p>Completa el pase de lista para habilitar esta hoja de evaluación.</p></div>}
           {comisionesConPresentes.map((grupo) => (
           <div className="table-wrap rubric-by-committee" key={grupo.id}>
