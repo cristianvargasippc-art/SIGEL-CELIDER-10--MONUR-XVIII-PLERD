@@ -22,7 +22,8 @@ import {
   Settings,
   Command,
   X,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Search
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import "./styles.css";
