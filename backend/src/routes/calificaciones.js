@@ -65,11 +65,11 @@ async function saveCalificacion(req, res, delegadoId, payload) {
 
     const data = {
       delegadoId: cleanId,
-      oratoria: payload.oratoria !== undefined ? sanitizeScore(payload.oratoria, 15, "Oratoria") : (existing?.oratoria ?? null),
-      argumentacion: payload.argumentacion !== undefined ? sanitizeScore(payload.argumentacion, 25, "Argumentacion") : (existing?.argumentacion ?? null),
-      negociacion: payload.negociacion !== undefined ? sanitizeScore(payload.negociacion, 20, "Negociacion") : (existing?.negociacion ?? null),
-      liderazgo: payload.liderazgo !== undefined ? sanitizeScore(payload.liderazgo, 15, "Liderazgo") : (existing?.liderazgo ?? null),
-      redaccion: payload.redaccion !== undefined ? sanitizeScore(payload.redaccion, 25, "Redaccion") : (existing?.redaccion ?? null),
+      oratoria: payload.oratoria !== undefined && payload.oratoria !== null ? sanitizeScore(payload.oratoria, 15, "Oratoria") : (existing?.oratoria ?? null),
+      argumentacion: payload.argumentacion !== undefined && payload.argumentacion !== null ? sanitizeScore(payload.argumentacion, 25, "Argumentacion") : (existing?.argumentacion ?? null),
+      negociacion: payload.negociacion !== undefined && payload.negociacion !== null ? sanitizeScore(payload.negociacion, 20, "Negociacion") : (existing?.negociacion ?? null),
+      liderazgo: payload.liderazgo !== undefined && payload.liderazgo !== null ? sanitizeScore(payload.liderazgo, 15, "Liderazgo") : (existing?.liderazgo ?? null),
+      redaccion: payload.redaccion !== undefined && payload.redaccion !== null ? sanitizeScore(payload.redaccion, 25, "Redaccion") : (existing?.redaccion ?? null),
       presenteEstado: payload.presente_estado ?? existing?.presenteEstado ?? null,
       pasaMinumeXvii: payload.pasa_minume_xvii ?? existing?.pasaMinumeXvii ?? false,
       mencion: payload.mencion !== undefined && payload.mencion !== null ? String(payload.mencion).trim() : (existing?.mencion ?? null),
