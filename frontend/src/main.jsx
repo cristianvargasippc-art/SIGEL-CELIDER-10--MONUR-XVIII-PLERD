@@ -9,6 +9,7 @@ import {
   Lock,
   LogOut,
   Plus,
+  Save,
   ShieldCheck,
   Trash2,
   Upload,
@@ -1026,7 +1027,27 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
               </div>
             </div>
           )}
-          {/* Botón "Actualizar Calificaciones" removido para evitar pérdida de calificaciones causada por flushPendingGrades */}
+          {presentes.length > 0 && (
+            <div style={{ display: "flex", gap: "12px", alignItems: "center", marginBottom: "20px", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="btn primary"
+                onClick={async () => {
+                  try {
+                    await flushPendingGrades();
+                    await load();
+                    triggerAlert("Calificaciones guardadas y refrescadas correctamente.", "success");
+                  } catch (error) {
+                    displayError(error);
+                  }
+                }}
+                style={{ height: "40px", display: "flex", alignItems: "center", gap: "8px" }}
+              >
+                <Save size={16} /> Guardar calificaciones
+              </button>
+            </div>
+          )}
+          {/* Botón "Guardar calificaciones" agregado para persistir cambios antes de salir de la sección */}
           {presentes.length === 0 && <div className="empty-state"><ClipboardCheck size={24} /><h3>Sin delegados presentes</h3><p>Completa el pase de lista para habilitar esta hoja de evaluación.</p></div>}
           {comisionesConPresentes.map((grupo) => (
           <div className="table-wrap rubric-by-committee" key={grupo.id}>
