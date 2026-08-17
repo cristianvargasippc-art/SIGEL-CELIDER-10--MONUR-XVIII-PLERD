@@ -277,8 +277,43 @@ function PrivateHome({ goLogin }) {
     </main>
   );
 }
-function Metric({ icon: Icon, label, value, note }) {
-  return <article className="metric-card"><Icon size={18} /><span>{label}</span><strong>{value}</strong><small>{note}</small></article>;
+function ErrorBoundary({ children, fallback }) {
+  return (
+    <ErrorBoundaryClass fallback={fallback}>
+      {children}
+    </ErrorBoundaryClass>
+  );
+}
+
+class ErrorBoundaryClass extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("Error caught by boundary:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || (
+        <div style={{ padding: "40px", textAlign: "center", color: "#a63a32" }}>
+          <h2>⚠️ Error en la aplicación</h2>
+          <p>{this.state.error?.message || "Error desconocido"}</p>
+          <button className="btn primary" onClick={() => this.setState({ hasError: false, error: null })}>
+            Reintentar
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
 }
 
 function EventosPanel({ user, eventos, setEventos, distritos, onReload, setEventoActivo }) {
@@ -286,6 +321,8 @@ function EventosPanel({ user, eventos, setEventos, distritos, onReload, setEvent
   const [fecha, setFecha] = useState("");
   const [distritoId, setDistritoId] = useState("");
   const canCreate = ["superadmin", "distrito"].includes(user.role);
+  const distritosSafe = Array.isArray(distritos) ? distritos : [];
+  const eventosSafe = Array.isArray(eventos) ? eventos : [];
 
   async function createEvento(event) {
     event.preventDefault();
@@ -293,7 +330,7 @@ function EventosPanel({ user, eventos, setEventos, distritos, onReload, setEvent
     if (!tempNombre) return;
     const tempFecha = fecha;
     const resolvedDistritoId = user.role === "distrito" ? user.distrito_id : (distritoId ? Number(distritoId) : null);
-    const targetDistrito = distritos.find((d) => d.id === resolvedDistritoId) || (user.distrito ? { id: resolvedDistritoId, codigo: user.distrito } : null);
+    const targetDistrito = distritosSafe.find((d) => d.id === resolvedDistritoId) || (user.distrito ? { id: resolvedDistritoId, codigo: user.distrito } : null);
 
     setNombre("");
     setFecha("");
@@ -335,7 +372,7 @@ function EventosPanel({ user, eventos, setEventos, distritos, onReload, setEvent
   async function deleteEvento(id) {
     if (!id || String(id).startsWith("temp-")) return;
     if (!confirm("Eliminar este evento y sus datos asociados?")) return;
-    const previous = [...eventos];
+    const previous = [...eventosSafe];
     setEventos((current) => current.filter((e) => e.id !== id));
     try {
       await apiRequest(`/api/eventos/${id}`, { method: "DELETE" });
@@ -353,12 +390,12 @@ function EventosPanel({ user, eventos, setEventos, distritos, onReload, setEvent
           <form className="inline-form" onSubmit={createEvento}>
             <label>Nombre<input value={nombre} onChange={(e) => setNombre(e.target.value)} required maxLength={180} /></label>
             <label>Fecha<input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></label>
-            {user.role === "superadmin" && <label>Distrito<select value={distritoId} onChange={(e) => setDistritoId(e.target.value)} required><option value="">Seleccionar</option>{distritos.map((d) => <option key={d.id} value={d.id}>{d.codigo}</option>)}</select></label>}
+            {user.role === "superadmin" && <label>Distrito<select value={distritoId} onChange={(e) => setDistritoId(e.target.value)} required><option value="">Seleccionar</option>{distritosSafe.map((d) => <option key={d.id} value={d.id}>{d.codigo}</option>)}</select></label>}
             <button className="btn primary"><Plus size={15} /> Crear</button>
           </form>
         )}
         <div className="admin-list">
-          {eventos.map((evento) => {
+          {eventosSafe.map((evento) => {
             const isTemp = String(evento.id).startsWith("temp-");
             return (
               <div key={evento.id} className="row-actions" style={isTemp ? { opacity: 0.6, pointerEvents: "none" } : undefined}>
@@ -1523,8 +1560,13 @@ function Dashboard({ user, onLogout }) {
           </div>
         </header>
 
-        <main className="workspace">
-          {active === "inicio" && (
+<main className="workspace">
+          <ErrorBoundary fallback={<div style={{ padding: "40px", textAlign: "center", color: "#a63a32" }}>
+            <h2>⚠️ Error cargando la vista</h2>
+            <p>No se pudo cargar el panel de calificaciones. Recarga la página o contacta al administrador.</p>
+            <button className="btn primary" onClick={() => window.location.reload()}>Recargar</button>
+          </div>}>
+            {active === "inicio" && (
             <>
               <section className="welcome-header-card">
                 <div className="welcome-greeting-row">
@@ -1556,7 +1598,8 @@ function Dashboard({ user, onLogout }) {
           {active === "usuarios" && <UsuariosPanel user={user} distritos={distritos} comisiones={comisiones} admins={admins} setAdmins={setAdmins} onReload={load} onDeactivate={deactivateAdmin} />}
           {active === "encuestas" && user.role === "superadmin" && <EncuestasAdminPanel />}
           {active === "seguridad" && user.role === "superadmin" && <SeguridadPanel audits={audits} onRefresh={loadAudits} />}
-        </main>
+        </ErrorBoundary>
+      </main>
 
         <EncuestaSatisfaccionModal isOpen={showSurveyModal} onClose={() => setShowSurveyModal(false)} />
       </div>
