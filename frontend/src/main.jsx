@@ -408,6 +408,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
   const [filtroCalificaciones, setFiltroCalificaciones] = useState("");
   const pendingGradeDeletesRef = useRef(new Set());
   const pendingGradeChangesRef = useRef(new Map());
+  const inputCacheRef = useRef(new Map());
   const canManageEvent = ["superadmin", "distrito"].includes(user?.role);
   const canTakeAttendance = canManageEvent;
 
@@ -552,35 +553,42 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
 
   function updateCalificacion(id, key, value) {
     const raw = String(value ?? "").trim();
+    const cacheKey = `${id}:${key}`;
+    inputCacheRef.current.set(cacheKey, raw);
+
     if (raw === "") {
       setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "" } : d));
-      pendingGradeDeletesRef.current.delete(`${id}:${key}`);
-      pendingGradeChangesRef.current.delete(`${id}:${key}`);
+      pendingGradeDeletesRef.current.delete(cacheKey);
+      pendingGradeChangesRef.current.delete(cacheKey);
       persistEmptyCalificacion(id, key);
       return;
     }
-    pendingGradeDeletesRef.current.delete(`${id}:${key}`);
+    pendingGradeDeletesRef.current.delete(cacheKey);
     const parsed = Number(raw);
     if (!Number.isFinite(parsed)) return;
 
     const maxVal = criterios[key]?.max ?? 100;
-    if (parsed > maxVal || parsed < 0) {
-      const clamped = Math.max(0, Math.min(maxVal, parsed));
+    if (parsed > maxVal) {
+      const clamped = Math.min(parsed, maxVal);
       const rounded = Number(clamped.toFixed(2));
       setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: rounded } : d));
-      pendingGradeChangesRef.current.set(`${id}:${key}`, rounded);
+      pendingGradeChangesRef.current.set(cacheKey, rounded);
+      displayError(new Error(scoreErrorMessage(key)));
+      return;
+    }
+    if (parsed < 0) {
+      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "0" } : d));
+      pendingGradeChangesRef.current.set(cacheKey, 0);
       displayError(new Error(scoreErrorMessage(key)));
       return;
     }
     if (hasTooManyDecimals(raw)) {
       displayError(new Error(scoreErrorMessage(key)));
-      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: raw } : d));
       return;
     }
 
-    const cleanValue = Number(Math.max(0, parsed).toFixed(2));
-    setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: parsed < 0 ? "0" : raw } : d));
-    pendingGradeChangesRef.current.set(`${id}:${key}`, cleanValue);
+    setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: raw } : d));
+    pendingGradeChangesRef.current.set(cacheKey, Number(raw));
   }
 
   async function persistEmptyCalificacion(id, key) {
@@ -596,20 +604,22 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     }
   }
 
-  async function handleGradeBlur(id, key, currentValue) {
-    const raw = String(currentValue ?? "").trim();
-    const fieldKey = `${id}:${key}`;
+  async function handleGradeBlur(id, key) {
+    const cacheKey = `${id}:${key}`;
+    const cachedRaw = inputCacheRef.current.get(cacheKey) ?? "";
+    inputCacheRef.current.delete(cacheKey);
+    const raw = cachedRaw.trim();
 
     if (raw === "") {
       setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "" } : d));
-      if (pendingGradeDeletesRef.current.has(fieldKey)) return;
-      pendingGradeDeletesRef.current.add(fieldKey);
+      if (pendingGradeDeletesRef.current.has(cacheKey)) return;
+      pendingGradeDeletesRef.current.add(cacheKey);
       try {
         await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: null }) });
-        pendingGradeDeletesRef.current.delete(fieldKey);
-        pendingGradeChangesRef.current.delete(fieldKey);
+        pendingGradeDeletesRef.current.delete(cacheKey);
+        pendingGradeChangesRef.current.delete(cacheKey);
       } catch (error) {
-        pendingGradeDeletesRef.current.delete(fieldKey);
+        pendingGradeDeletesRef.current.delete(cacheKey);
         displayError(error);
       }
       return;
@@ -619,26 +629,36 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     if (!Number.isFinite(parsed)) return;
 
     const maxVal = criterios[key]?.max ?? 100;
-    if (hasTooManyDecimals(raw)) {
-      displayError(new Error("Solo se permiten hasta dos decimales."));
-      return;
-    }
-    if (parsed > maxVal || parsed < 0) {
-      const clamped = Math.max(0, Math.min(maxVal, parsed));
+    if (parsed > maxVal) {
+      const clamped = Math.min(parsed, maxVal);
       const rounded = Number(clamped.toFixed(2));
       setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: rounded } : d));
       try {
         await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: rounded }) });
-        pendingGradeChangesRef.current.delete(fieldKey);
+        pendingGradeChangesRef.current.delete(cacheKey);
       } catch (error) {
         displayError(error);
       }
       return;
     }
+    if (parsed < 0) {
+      setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: "0" } : d));
+      try {
+        await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: "0" }) });
+        pendingGradeChangesRef.current.delete(cacheKey);
+      } catch (error) {
+        displayError(error);
+      }
+      return;
+    }
+    if (hasTooManyDecimals(raw)) {
+      displayError(new Error("Solo se permiten hasta dos decimales."));
+      return;
+    }
 
-    const cleanValue = Number(Math.max(0, parsed).toFixed(2));
+    const cleanValue = Number(parsed.toFixed(2));
     setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: cleanValue } : d));
-    pendingGradeChangesRef.current.delete(fieldKey);
+    pendingGradeChangesRef.current.delete(cacheKey);
     try {
       await apiRequest(`/api/calificaciones/${id}`, { method: "PATCH", body: JSON.stringify({ [key]: cleanValue }) });
     } catch (error) {
@@ -1042,7 +1062,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
                           placeholder="-"
                           value={d[key]}
                           onChange={(e) => updateCalificacion(d.id, key, e.target.value)}
-                          onBlur={(e) => handleGradeBlur(d.id, key, e.target.value)}
+                          onBlur={() => handleGradeBlur(d.id, key)}
                         />
                       </td>
                     ))}
