@@ -437,16 +437,19 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
   const canManageEvent = ["superadmin", "distrito"].includes(user?.role);
   const canTakeAttendance = canManageEvent;
 
+  const delegadosSafe = Array.isArray(delegados) ? delegados : [];
+  const comisionesSafe = Array.isArray(comisiones) ? comisiones : [];
+
   useEffect(() => {
     if (comisionId) {
-      const selectedCom = comisiones.find((c) => Number(c.id) === Number(comisionId));
+      const selectedCom = comisionesSafe.find((c) => Number(c.id) === Number(comisionId));
       if (selectedCom) setModo(selectedCom.modoAsignacion || "individual");
       setPaises([]);
       setCantidad("");
     }
   }, [comisionId]);
 
-  const presentes = delegados.filter((d) => d.asistencia === "presente_votando");
+  const presentes = delegadosSafe.filter((d) => d.asistencia === "presente_votando");
   const presentesFiltrados = useMemo(() => {
     if (!filtroCalificaciones.trim()) return presentes;
     const search = filtroCalificaciones.toLowerCase().trim();
@@ -474,35 +477,35 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     return [...map.values()];
   }, [presentesOrdenados]);
 
-  const totalDelegados = delegados.length;
-  const totalAsignados = delegados.filter((d) => d.designacion && d.designacion.trim() !== "").length;
+  const totalDelegados = delegadosSafe.length;
+  const totalAsignados = delegadosSafe.filter((d) => d.designacion && d.designacion.trim() !== "").length;
   const totalSinAsignar = totalDelegados - totalAsignados;
 
   const comisionDelegados = useMemo(() => {
     if (!comisionId) return [];
-    return delegados.filter((d) => String(d.comisionId) === String(comisionId));
-  }, [delegados, comisionId]);
+    return delegadosSafe.filter((d) => String(d.comisionId) === String(comisionId));
+  }, [delegadosSafe, comisionId]);
 
   const delegadosDisponiblesParaComision = useMemo(() => {
     if (!comisionId) return [];
-    return delegados.filter((d) => {
+    return delegadosSafe.filter((d) => {
       const sinDesignacion = !d.designacion || d.designacion.trim() === "";
       const enComision = String(d.comisionId) === String(comisionId);
       const sinComision = !d.comisionId;
       return sinDesignacion && (enComision || sinComision);
     });
-  }, [delegados, comisionId]);
+  }, [delegadosSafe, comisionId]);
 
   const yaAsignados = useMemo(() => comisionDelegados.filter((d) => d.designacion && d.designacion.trim() !== "").length, [comisionDelegados]);
   const sinAsignar = delegadosDisponiblesParaComision.length;
   const cantidadNum = Number(cantidad) || 0;
   const maxPaises = modo === "duplas" ? Math.ceil(cantidadNum / 2) : cantidadNum;
-  const comisionSeleccionada = comisiones.find((c) => String(c.id) === String(comisionId));
+  const comisionSeleccionada = comisionesSafe.find((c) => String(c.id) === String(comisionId));
   const esCorteSeleccionada = /corte internacional de justicia|cij/i.test(comisionSeleccionada?.nombre || "");
   const paisesRequeridos = esCorteSeleccionada ? 0 : maxPaises;
 
   const delegadosSorted = useMemo(() => {
-    return [...delegados].sort((a, b) => {
+    return [...delegadosSafe].sort((a, b) => {
       const comA = a.comision || "zzz";
       const comB = b.comision || "zzz";
       if (comA !== comB) return comA.localeCompare(comB);
@@ -511,7 +514,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
       if (aAssigned !== bAssigned) return aAssigned - bAssigned;
       return Number(a.id) - Number(b.id);
     });
-  }, [delegados]);
+  }, [delegadosSafe]);
 
   async function load() {
     try {
@@ -693,7 +696,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
       minume: "Etapa MINUME"
     };
 
-    exportExcel(`SIGEL-${evento.nombre}.xlsx`, delegados.map((d) => ({
+    exportExcel(`SIGEL-${evento.nombre}.xlsx`, delegadosSafe.map((d) => ({
       Nombre: d.nombre,
       Apellido: d.apellido || "",
       Comisión: d.comision,
@@ -807,11 +810,11 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
       <div className="event-tools">
         <div className="tool-upload-group">
           <label className="file-drop"><Upload size={18} /> Subir comisiones Excel<input type="file" accept=".xlsx" onChange={(e) => upload("comisiones", e.target.files?.[0])} /></label>
-          {comisiones.length > 0 && <button className="btn danger small-btn" onClick={clearComisiones}><Trash2 size={14} /> Limpiar comisiones</button>}
+          {comisionesSafe.length > 0 && <button className="btn danger small-btn" onClick={clearComisiones}><Trash2 size={14} /> Limpiar comisiones</button>}
         </div>
         <div className="tool-upload-group">
           <label className="file-drop"><FileSpreadsheet size={18} /> Subir delegados Excel<input type="file" accept=".xlsx" onChange={(e) => upload("delegados", e.target.files?.[0])} /></label>
-          {delegados.length > 0 && <button className="btn danger small-btn" onClick={clearDelegados}><Trash2 size={14} /> Limpiar Delegados</button>}
+          {delegadosSafe.length > 0 && <button className="btn danger small-btn" onClick={clearDelegados}><Trash2 size={14} /> Limpiar Delegados</button>}
         </div>
       </div>
       <div className="assignment-panel">
@@ -821,7 +824,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
             <span className="assign-label">Comité</span>
             <select value={comisionId} onChange={(e) => setComisionId(e.target.value)}>
               <option value="">Seleccionar comité</option>
-              {comisiones.map((c) => <option value={c.id} key={c.id}>{c.nombre}</option>)}
+              {comisionesSafe.map((c) => <option value={c.id} key={c.id}>{c.nombre}</option>)}
             </select>
           </label>
           <label>
@@ -891,7 +894,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
           </button>
         </div>
       </div>
-      {delegados.length > 0 && (
+      {delegadosSafe.length > 0 && (
         <div className="global-quota-banner">
           <span className="quota-item">Total cargados: <strong>{totalDelegados}</strong></span>
           <span className="quota-item assigned">Con país: <strong>{totalAsignados}</strong></span>
@@ -948,7 +951,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
         </table>
       </div>
       <div className="next-step-row">
-        <p className="helper-text">{presentes.length} de {delegados.length} presentes pasan a calificaciones.</p>
+        <p className="helper-text">{presentes.length} de {delegadosSafe.length} presentes pasan a calificaciones.</p>
         <button className="btn primary" type="button" onClick={() => setView("calificaciones")} disabled={presentes.length === 0}>
           <ClipboardCheck size={15} /> Siguiente
         </button>
@@ -1418,25 +1421,25 @@ function Dashboard({ user, onLogout }) {
   async function load() {
     try {
       if (user.role === "superadmin" || user.role === "distrito") {
-        const [eventRows, districtRows, adminRows, commissionRows, auditRows] = await Promise.all([
+        const results = await Promise.allSettled([
           apiRequest("/api/eventos"),
           apiRequest("/api/eventos/distritos"),
           apiRequest("/api/admins"),
           apiRequest("/api/admins/comisiones"),
           user.role === "superadmin" ? apiRequest("/api/audit").catch(() => []) : Promise.resolve([])
         ]);
-        setEventos(eventRows);
-        setDistritos(districtRows);
-        setAdmins(adminRows);
-        setComisiones(commissionRows);
-        setAudits(auditRows);
+        setEventos(results[0].status === "fulfilled" ? results[0].value : []);
+        setDistritos(results[1].status === "fulfilled" ? results[1].value : []);
+        setAdmins(results[2].status === "fulfilled" ? results[2].value : []);
+        setComisiones(results[3].status === "fulfilled" ? results[3].value : []);
+        setAudits(results[4].status === "fulfilled" ? results[4].value : []);
       } else {
-        const [eventRows, districtRows] = await Promise.all([
+        const [eventRows, districtRows] = await Promise.allSettled([
           apiRequest("/api/eventos"),
           apiRequest("/api/eventos/distritos")
         ]);
-        setEventos(eventRows);
-        setDistritos(districtRows);
+        setEventos(eventRows.status === "fulfilled" ? eventRows.value : []);
+        setDistritos(districtRows.status === "fulfilled" ? districtRows.value : []);
       }
     } catch (err) {
       console.error(err);
