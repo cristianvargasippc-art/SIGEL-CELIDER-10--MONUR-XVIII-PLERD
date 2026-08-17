@@ -31,8 +31,19 @@ import "./home.css";
 import { getFlag } from "./utils/flags";
 
 const LOGO_SRC = "/imagenes/logo.png";
-const API_ORIGIN = (import.meta.env.VITE_API_URL || "").replace(/\/api\/?$/, "").replace(/\/$/, "");
-const API_BASE = API_ORIGIN ? `${API_ORIGIN}/api` : "/api";
+const CONFIGURED_API_URL = (import.meta.env.VITE_API_URL || "").trim();
+function resolveApiBase() {
+  if (!CONFIGURED_API_URL) return "/api";
+  try {
+    const url = new URL(CONFIGURED_API_URL, window.location.origin);
+    const cleanPath = url.pathname.replace(/\/api\/?$/, "").replace(/\/$/, "");
+    if (url.origin === window.location.origin) return "/api";
+    return `${url.origin}${cleanPath}/api`;
+  } catch {
+    return "/api";
+  }
+}
+const API_BASE = resolveApiBase();
 const DISTRITOS = ["10-01", "10-02", "10-03", "10-04", "10-05", "10-06", "10-07"];
 const PAISES = [
   "Afganistán", "Albania", "Alemania", "Andorra", "Angola", "Antigua y Barbuda", "Arabia Saudita", "Argelia", "Argentina", "Armenia", "Australia", "Austria", "Azerbaiyán",
@@ -188,6 +199,16 @@ function exportExcel(filename, rows) {
   const book = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(book, sheet, "Reporte");
   XLSX.writeFile(book, filename);
+}
+
+function readStoredArray(key) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(value) ? value : [];
+  } catch {
+    localStorage.removeItem(key);
+    return [];
+  }
 }
 
 function displayError(error) {
@@ -427,7 +448,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
   const [paisQuery, setPaisQuery] = useState("");
   const [paises, setPaises] = useState([]);
   const [customCountry, setCustomCountry] = useState("");
-  const [customCountries, setCustomCountries] = useState(() => JSON.parse(localStorage.getItem("sigel-paises") || "[]"));
+  const [customCountries, setCustomCountries] = useState(() => readStoredArray("sigel-paises"));
   const [uploading, setUploading] = useState(false);
   const [view, setView] = useState(initialView);
   const [filtroCalificaciones, setFiltroCalificaciones] = useState("");
@@ -1510,10 +1531,14 @@ function Dashboard({ user, onLogout }) {
           )}
         </div>
         <nav className="side-nav" aria-label="Panel de navegación">
-          <div className="sidebar-section-title">INICIO</div>
-          <button className={active === "inicio" ? "active" : ""} onClick={() => handleNavClick("inicio")}>
-            <BarChart3 size={17} /> Inicio
-          </button>
+          {navItems.some((i) => i.id === "inicio") && (
+            <>
+              <div className="sidebar-section-title">INICIO</div>
+              <button className={active === "inicio" ? "active" : ""} onClick={() => handleNavClick("inicio")}>
+                <BarChart3 size={17} /> Inicio
+              </button>
+            </>
+          )}
 
           <div className="sidebar-section-title">GESTIÓN</div>
           {navItems.filter((i) => i.id !== "inicio").map(({ id, label, icon: Icon }) => (
