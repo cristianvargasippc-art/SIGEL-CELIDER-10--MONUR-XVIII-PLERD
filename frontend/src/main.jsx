@@ -623,7 +623,6 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
     // primer digito se quede pegado al borrar.
     setDelegados((current) => current.map((d) => d.id === id ? { ...d, [key]: raw } : d));
     pendingGradeDeletesRef.current.delete(cacheKey);
-    pendingGradeChangesRef.current.delete(cacheKey);
   }
 
   async function handleGradeBlur(id, key) {
