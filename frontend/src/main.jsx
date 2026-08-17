@@ -1033,10 +1033,7 @@ function EventoDetalle({ evento, onBack, user, initialView = "flujo" }) {
                 }}
                 style={{ height: "40px", display: "flex", alignItems: "center", gap: "8px" }}
               >
-                <RefreshCw size={15} /> Actualizar Calificaciones
-              </button>
-            </div>
-          )}
+                {/* Botón removido para evitar pérdida de calificaciones causada por flushPendingGrades */}
 
           {presentes.length === 0 && <div className="empty-state"><ClipboardCheck size={24} /><h3>Sin delegados presentes</h3><p>Completa el pase de lista para habilitar esta hoja de evaluación.</p></div>}
           {comisionesConPresentes.map((grupo) => (
